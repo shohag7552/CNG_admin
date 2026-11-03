@@ -1,19 +1,17 @@
-import 'package:kikomart_user_app/app/common/widgets/auth_dialog.dart';
-import 'package:kikomart_user_app/app/common/widgets/directional_flip.dart';
-import 'package:kikomart_user_app/app/controllers/auth_controller.dart';
-import 'package:kikomart_user_app/app/controllers/coupon_controller.dart';
-import 'package:kikomart_user_app/app/controllers/localization_controller.dart';
-import 'package:kikomart_user_app/app/controllers/policy_controller.dart';
-import 'package:kikomart_user_app/app/controllers/profile_controller.dart';
-import 'package:kikomart_user_app/app/helper/currency_helper.dart';
-import 'package:kikomart_user_app/app/helper/nav_bar_visibility.dart';
-import 'package:kikomart_user_app/app/helper/routes/app_router.dart';
-import 'package:kikomart_user_app/app/resources/colors.dart';
-import 'package:kikomart_user_app/app/resources/constants.dart';
-import 'package:kikomart_user_app/app/resources/text_style.dart';
-import 'package:kikomart_user_app/app/modules/language/widgets/language_selector.dart';
-import 'package:kikomart_user_app/app/helper/localization_extension_helper.dart';
-import 'package:kikomart_user_app/app/modules/profile/widgets/change_password_dialog.dart';
+import 'package:appwrite_boilerplate/app/common/widgets/auth_dialog.dart';
+import 'package:appwrite_boilerplate/app/common/widgets/directional_flip.dart';
+import 'package:appwrite_boilerplate/app/controllers/auth_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/localization_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/policy_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/profile_controller.dart';
+import 'package:appwrite_boilerplate/app/helper/nav_bar_visibility.dart';
+import 'package:appwrite_boilerplate/app/helper/routes/app_router.dart';
+import 'package:appwrite_boilerplate/app/resources/colors.dart';
+import 'package:appwrite_boilerplate/app/resources/constants.dart';
+import 'package:appwrite_boilerplate/app/resources/text_style.dart';
+import 'package:appwrite_boilerplate/app/modules/language/widgets/language_selector.dart';
+import 'package:appwrite_boilerplate/app/helper/localization_extension_helper.dart';
+import 'package:appwrite_boilerplate/app/modules/profile/widgets/change_password_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
@@ -33,11 +31,6 @@ class _ProfilePageState extends State<ProfilePage> {
     super.initState();
 
     Get.find<PolicyController>().fetchPolicies();
-
-    // Coupons are account-only; load them for the menu badge count.
-    if (Get.find<AuthController>().isLoggedIn) {
-      Get.find<CouponController>().getCoupons(showError: false);
-    }
   }
 
   /// Wraps an account-only action: runs it when signed in, otherwise opens the
@@ -105,93 +98,6 @@ class _ProfilePageState extends State<ProfilePage> {
                                 ChangePasswordDialog.show(context);
                               }),
                             ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 20),
-
-                        _buildSection(
-                          title: 'orders_and_activity'.tr,
-                          items: [
-                            _ProfileOption(
-                              icon: Icons.history,
-                              title: 'order_history'.tr,
-                              subtitle: 'order_history_subtitle'.tr,
-                              onTap: _authGuard(isLoggedIn, () {
-                                context.pushNamed(RouteNames.orderHistory);
-                              }),
-                            ),
-                            _ProfileOption(
-                              icon: Icons.favorite_outline,
-                              title: 'favorites'.tr,
-                              subtitle: 'favorites_subtitle'.tr,
-                              onTap: _authGuard(isLoggedIn, () {
-                                context.pushNamed(
-                                  RouteNames.favorites,
-                                  queryParameters: {'fromMenu': 'true'},
-                                );
-                              }),
-                            ),
-                            // _ProfileOption(
-                            //   icon: Icons.star_outline,
-                            //   title: 'reviews_and_ratings'.tr,
-                            //   subtitle: 'your_reviews_on_items'.tr,
-                            //   onTap: () {
-                            //     Get.snackbar('reviews_and_ratings'.tr, 'feature_coming_soon'.tr);
-                            //   },
-                            // ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 20),
-
-                        _buildSection(
-                          title: 'offers_and_rewards'.tr,
-                          items: [
-                            _ProfileOption(
-                              icon: Icons.local_offer_outlined,
-                              title: 'coupons'.tr,
-                              subtitle: 'view_and_apply_promo_codes'.tr,
-                              // Live count of usable coupons; with none (or
-                              // signed out) the row keeps the default chevron.
-                              trailing: isLoggedIn
-                                  ? GetBuilder<CouponController>(
-                                      builder: (couponController) {
-                                        final count = couponController
-                                            .availableCouponCount;
-                                        return count > 0
-                                            ? _buildBadge('$count')
-                                            : DirectionalFlip(
-                                                child: Icon(
-                                                  Icons.chevron_right,
-                                                  color: isDark
-                                                      ? Colors.white38
-                                                      : context.textLight,
-                                                ),
-                                              );
-                                      },
-                                    )
-                                  : null,
-                              onTap: _authGuard(isLoggedIn, () {
-                                context.pushNamed(RouteNames.coupons);
-                              }),
-                            ),
-                            _ProfileOption(
-                              icon: Icons.card_giftcard_outlined,
-                              title: 'loyalty_points'.tr,
-                              subtitle: 'earn_and_redeem_points'.tr,
-                              onTap: _authGuard(isLoggedIn, () {
-                                context.pushNamed(RouteNames.loyalty);
-                              }),
-                            ),
-                            // _ProfileOption(
-                            //   icon: Icons.share_outlined,
-                            //   title: 'refer_and_earn'.tr,
-                            //   subtitle: 'invite_friends_and_get_rewards'.tr,
-                            //   onTap: () {
-                            //     Get.snackbar('refer_and_earn'.tr, 'feature_coming_soon'.tr);
-                            //   },
-                            // ),
                           ],
                         ),
 
@@ -428,7 +334,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${'balance'.tr}: ${CurrencyHelper.formatWithSeparators(user?.walletBalance ?? 0)}',
+                          user?.email ?? '',
                           style: poppinsRegular.copyWith(
                             fontSize: Constants.fontSizeDefault,
                             color:
@@ -653,23 +559,6 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildBadge(String count) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: ColorResource.error,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        count,
-        style: poppinsBold.copyWith(
-          fontSize: 12,
-          color: ColorResource.textWhite,
-        ),
-      ),
-    );
-  }
-
   void _showLogoutDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -719,7 +608,6 @@ class _ProfileOption extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
-  final Widget? trailing;
   final Color? iconColor;
   final VoidCallback onTap;
 
@@ -727,7 +615,6 @@ class _ProfileOption extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.subtitle,
-    this.trailing,
     this.iconColor,
     required this.onTap,
   });
@@ -766,8 +653,7 @@ class _ProfileOption extends StatelessWidget {
           color: isDark ? Colors.white60 : context.textSecondary,
         ),
       ),
-      trailing: trailing ??
-          DirectionalFlip(
+      trailing: DirectionalFlip(
             child: Icon(
               Icons.chevron_right,
               color: isDark ? Colors.white38 : context.textLight,

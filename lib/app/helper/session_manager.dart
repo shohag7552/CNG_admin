@@ -1,7 +1,5 @@
-import 'package:kikomart_user_app/app/controllers/auth_controller.dart';
-import 'package:kikomart_user_app/app/controllers/cart_controller.dart';
-import 'package:kikomart_user_app/app/controllers/favorites_controller.dart';
-import 'package:kikomart_user_app/app/controllers/profile_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/auth_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/profile_controller.dart';
 import 'package:get/get.dart';
 
 /// Whether a user session is currently active.
@@ -18,22 +16,17 @@ bool isUserLoggedIn() =>
 abstract class SessionManager {
   const SessionManager._();
 
-  /// Loads the app-wide user data immediately after a successful login/signup
-  /// (the things visible right away on the dashboard: profile, cart badge,
-  /// favourite hearts). Page-specific data — orders, addresses, loyalty,
-  /// notifications — loads when the user opens those now-unlocked pages.
+  /// Loads the app-wide user data immediately after a successful login/signup.
+  /// Add every user-scoped controller that must be warm on the dashboard here;
+  /// page-specific data should load when its page opens.
   static void loadUserData() {
     _safe(() => Get.find<ProfileController>().fetchUserProfile());
-    _safe(() => Get.find<CartController>().getCartItems());
-    _safe(() => Get.find<FavoritesController>().fetchFavorites());
   }
 
   /// Clears locally cached user data on logout so a guest never sees stale
-  /// info (cart badge, favourite hearts, profile). Server data is untouched.
+  /// info. Add a `clearLocal()` call for every user-scoped controller.
   static void clearUserData() {
     _safe(() => Get.find<ProfileController>().clearLocal());
-    _safe(() => Get.find<CartController>().clearLocal());
-    _safe(() => Get.find<FavoritesController>().clearLocal());
   }
 
   static void _safe(void Function() action) {

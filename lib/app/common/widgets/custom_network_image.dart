@@ -1,4 +1,4 @@
-import 'package:kikomart_user_app/app/resources/images.dart';
+import 'package:appwrite_boilerplate/app/resources/images.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';

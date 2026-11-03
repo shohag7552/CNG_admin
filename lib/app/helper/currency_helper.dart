@@ -1,4 +1,4 @@
-import 'package:kikomart_user_app/app/controllers/settings_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/settings_controller.dart';
 import 'package:get/get.dart';
 
 /// Centralized currency formatting helper

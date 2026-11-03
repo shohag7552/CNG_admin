@@ -1,4 +1,4 @@
-import 'package:kikomart_user_app/app/resources/constants.dart';
+import 'package:appwrite_boilerplate/app/resources/constants.dart';
 import 'package:get/get.dart';
 
 extension TranslatableMap on Map<String, dynamic>? {

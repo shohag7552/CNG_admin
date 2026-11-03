@@ -4,8 +4,8 @@ import 'dart:developer';
 import 'package:appwrite/appwrite.dart';
 import 'package:appwrite/enums.dart';
 import 'package:appwrite/models.dart';
-import 'package:kikomart_user_app/app/appwrite/appwrite_config.dart';
-import 'package:kikomart_user_app/app/common/widgets/custom_toster.dart';
+import 'package:appwrite_boilerplate/app/appwrite/appwrite_config.dart';
+import 'package:appwrite_boilerplate/app/common/widgets/custom_toster.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
@@ -236,8 +236,6 @@ class AppwriteService {
           'email': email,
           'phone': phone,
           'role': role,
-          'wallet_balance': 0.0,
-          'loyalty_points': 0,
           'fcm_token': fcmToken,
           // 'is_active': true,
         },
@@ -435,7 +433,7 @@ class AppwriteService {
 
       final result = await storage.createFile(
         bucketId:
-            AppwriteConfig.postsBucketId, // Create bucket in Appwrite console
+            AppwriteConfig.storageBucketId, // Create bucket in Appwrite console
         fileId: ID.unique(), // Auto-generate unique ID
         file: input,
         permissions: [Permission.read(Role.any())],
@@ -445,7 +443,7 @@ class AppwriteService {
       log("Upload successful: ${result.$id} // ${result.toMap()}");
       // Construct a direct view/preview URL (public if bucket/file perms allow it)
       final fileUrl =
-          '${AppwriteConfig.endpoint}/storage/buckets/${AppwriteConfig.postsBucketId}/files/${result.$id}/view?project=${AppwriteConfig.projectId}';
+          '${AppwriteConfig.endpoint}/storage/buckets/${AppwriteConfig.storageBucketId}/files/${result.$id}/view?project=${AppwriteConfig.projectId}';
 
       log(fileUrl);
       return fileUrl;
@@ -458,7 +456,7 @@ class AppwriteService {
   Future<void> deleteImage(String fileId) async {
     try {
       await storage.deleteFile(
-        bucketId: AppwriteConfig.postsBucketId,
+        bucketId: AppwriteConfig.storageBucketId,
         fileId: fileId,
       );
       log("Image deleted from storage.");
@@ -467,144 +465,28 @@ class AppwriteService {
     }
   }
 
-  Future<void> notifyOrderPlaced(String currentUserId, String orderId) async {
-    // 1. Notify the customer that their order was received
-    try {
-      await functions.createExecution(
-        functionId: AppwriteConfig.notificationFunctionId,
-        body: jsonEncode({
-          "type": "order_update",
-          "userId": currentUserId,
-          "title": 'order_placed_notification_title'.tr,
-          "message": 'order_placed_notification_body'.trParams({'orderId': orderId}),
-          "orderId": orderId,
-        }),
-      );
-      log("✅ Customer order notification sent");
-    } catch (e) {
-      log("❌ Failed to send customer notification: $e");
-    }
-
-    // 2. Notify the store admin that a new order has been placed
-    try {
-      await functions.createExecution(
-        functionId: AppwriteConfig.notificationFunctionId,
-        body: jsonEncode({
-          "type": "broadcast",
-          "topic": AppwriteConfig.storeAdminTopicId,
-          "title": 'new_order_notification_title'.tr,
-          "message":
-              'new_order_notification_body'.trParams({'orderId': orderId}),
-          "orderId": orderId,
-        }),
-      );
-      log("✅ Store admin order notification sent");
-    } catch (e) {
-      log("❌ Failed to send store admin notification: $e");
-    }
-  }
-
-  Future<Map<String, dynamic>?> requestStripPayment({
-    required int amount,
-    required String currency,
-    required String userEmail,
+  /// Runs an Appwrite Function synchronously and returns its decoded JSON
+  /// body, or null when it fails. Use this for any server-side logic (push
+  /// fan-out, payments, privileged writes) — never ship an API key.
+  Future<Map<String, dynamic>?> executeFunction({
+    required String functionId,
+    Map<String, dynamic> payload = const {},
   }) async {
-    // Ensure you have initialized 'client' somewhere globally or pass it in
-    // Functions functions = Functions(client);
-
     try {
-      debugPrint("====> Requesting Server to send Stripe payment...");
-
-      /// Executing the serverless function directly via the Appwrite SDK
       final execution = await functions.createExecution(
-        functionId: AppwriteConfig.stripePaymentFunctionId,
-        body: jsonEncode({
-          'amount': amount,
-          'currency': currency,
-          'email': userEmail,
-        }),
-        // body: jsonEncode({'amount': 1500}), // $15.00
+        functionId: functionId,
+        body: jsonEncode(payload),
       );
-
       if (execution.status == ExecutionStatus.completed) {
-        log("✅ Stripe payment request sent to server!");
-        return jsonDecode(execution.responseBody);
-      } else {
-        log("⚠️ Function failed: ${execution.responseBody}");
-        return null;
+        final body = execution.responseBody;
+        return body.isEmpty ? {} : jsonDecode(body) as Map<String, dynamic>;
       }
+      log('Function $functionId failed: ${execution.responseBody}');
     } catch (e) {
-      log("❌ Failed to trigger Stripe payment function: $e");
-      return null;
+      log('Function $functionId threw: $e');
     }
+    return null;
   }
-
-  // String getImageUrl(String fileId) {
-  //   return storage.getFileView(
-  //     bucketId: "YOUR_BUCKET_ID",
-  //     fileId: fileId,
-  //   ).href;
-  // }
-
-  // Future<Map<String, dynamic>?> uploadXFileAndSave(XFile xfile, {String? userId}) async {
-  //   try {
-  //     // Build InputFile correctly for web vs mobile
-  //     late InputFile input;
-  //     if (kIsWeb) {
-  //       final bytes = await xfile.readAsBytes(); // required on web
-  //       input = InputFile.fromBytes(bytes: bytes, filename: xfile.name);
-  //     } else {
-  //       // mobile/desktop: path is available
-  //       if (xfile.path == null || xfile.path!.isEmpty) {
-  //         throw Exception('Invalid file path on non-web platform');
-  //       }
-  //       input = InputFile.fromPath(path: xfile.path!, filename: xfile.name);
-  //     }
-  //
-  //     // Upload file
-  //     final uploadedFile = await storage.createFile(
-  //       bucketId: BUCKET_ID,
-  //       fileId: ID.unique(),
-  //       file: input,
-  //       // Optional: set file-level permissions; remove or adjust as needed
-  //       // permissions: [ Permission.read(Role.any()) ],
-  //     );
-  //
-  //     final fileId = uploadedFile.$id;
-  //
-  //     // Construct a direct view/preview URL (public if bucket/file perms allow it)
-  //     final fileUrl =
-  //         'https://cloud.appwrite.io/v1/storage/buckets/$BUCKET_ID/files/$fileId/view?project=$PROJECT_ID';
-  //     // If you use a custom endpoint, replace cloud.appwrite.io with your endpoint domain.
-  //
-  //     // Save metadata to database (optional)
-  //     final doc = await databases.createDocument(
-  //       databaseId: DATABASE_ID,
-  //       collectionId: COLLECTION_ID,
-  //       documentId: ID.unique(),
-  //       data: {
-  //         'fileId': fileId,
-  //         'fileName': xfile.name,
-  //         'fileUrl': fileUrl,
-  //         'uploaderId': userId ?? 'anonymous',
-  //         'createdAt': DateTime.now().toIso8601String(),
-  //       },
-  //     );
-  //
-  //     return {
-  //       'fileId': fileId,
-  //       'fileUrl': fileUrl,
-  //       'document': doc,
-  //     };
-  //   } on AppwriteException catch (e) {
-  //     // Appwrite-specific errors give helpful fields
-  //     print('AppwriteException: ${e.code} ${e.message} ${e.response}');
-  //     return null;
-  //   } catch (e) {
-  //     print('Upload error: $e');
-  //     return null;
-  //   }
-  // }
 }
 
 class AppWriteResponse {

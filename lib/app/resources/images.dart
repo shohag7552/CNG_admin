@@ -1,18 +1,7 @@
-class Images{
+class Images {
   static const String logo = 'assets/images/logo.png';
   static const String english = 'assets/images/english.png';
   static const String bengali = 'assets/images/bangla.png';
   static const String arabic = 'assets/images/arabic.png';
-  static const String bell = 'assets/images/bell.png';
-  static const String ring = 'assets/images/ringing.png';
-  static const String world = 'assets/images/world.png';
-  static const String placeholder = 'assets/images/placeholder.jpg';
-  static const String placeholder1 = 'assets/images/placeholder1.png';
-  static const String placeholder2 = 'assets/images/placeholder2.png';
   static const String placeholder3 = 'assets/images/placeholder3.png';
-  static const String veg = 'assets/images/vegan.png';
-  static const String shoppingBanner = 'assets/images/shopping_banner.jpg';
-  /// Flash-sale panel backdrop — "SALE" tags on dark, by Tamanna Rumee on
-  /// Unsplash (Unsplash License): unsplash.com/photos/Wt33T42JNCM
-  static const String flashSaleBg = 'assets/images/flash_sale_bg.jpg';
 }

@@ -1,40 +1,22 @@
 import 'dart:math' as math;
 
-import 'dart:async';
 
-import 'package:kikomart_user_app/app/common/widgets/custom_network_image.dart';
-import 'package:kikomart_user_app/app/controllers/cart_controller.dart';
-import 'package:kikomart_user_app/app/controllers/localization_controller.dart';
-import 'package:kikomart_user_app/app/controllers/product_controller.dart';
-import 'package:kikomart_user_app/app/helper/localization_extension_helper.dart';
-import 'package:kikomart_user_app/app/helper/price_helper.dart';
-import 'package:kikomart_user_app/app/helper/routes/app_router.dart';
-import 'package:kikomart_user_app/app/helper/web_search_bus.dart';
-import 'package:kikomart_user_app/app/models/product_model.dart';
-import 'package:kikomart_user_app/app/modules/cart/widgets/web_cart_drawer.dart';
-import 'package:kikomart_user_app/app/resources/colors.dart';
-import 'package:kikomart_user_app/app/resources/images.dart';
+import 'package:appwrite_boilerplate/app/controllers/localization_controller.dart';
+import 'package:appwrite_boilerplate/app/resources/colors.dart';
+import 'package:appwrite_boilerplate/app/resources/images.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:kikomart_user_app/app/resources/constants.dart';
-import 'package:kikomart_user_app/app/resources/text_style.dart';
-import 'package:kikomart_user_app/app/helper/dashboard_tab_bus.dart';
+import 'package:appwrite_boilerplate/app/resources/constants.dart';
+import 'package:appwrite_boilerplate/app/resources/text_style.dart';
+import 'package:appwrite_boilerplate/app/helper/dashboard_tab_bus.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:go_router/go_router.dart';
 
 /// Shared web/desktop top navigation bar.
 ///
-/// Layout: [Brand] [Home] [Favorites] ──search── [Cart] [Orders] [Profile] [Menu]
+/// Layout: [Brand] [Home] [Notifications] ────── [Language] [Theme] | [Menu]
 ///
 /// [selectedIndex] highlights the active destination (pass null on sub-pages so
-/// nothing is highlighted). Destinations map to the dashboard tab indices:
-/// 0 Home · 1 Favorites · 2 Cart · 3 Orders · 4 Profile.
-///
-/// The cart is the one exception: instead of navigating to tab 2 it slides
-/// [WebCartDrawer] in from the trailing edge, so a shopper can review the cart
-/// and go to checkout without losing the page they were browsing. Every other
-/// destination still routes through [onDestinationSelected], and mobile — which
-/// never renders this bar — is unaffected.
+/// nothing is highlighted). Destinations map to [DashboardTabs] indices.
 class WebTopNav extends StatelessWidget implements PreferredSizeWidget {
   final int? selectedIndex;
   final ValueChanged<int> onDestinationSelected;
@@ -101,8 +83,8 @@ class WebTopNav extends StatelessWidget implements PreferredSizeWidget {
   /// Beyond the cap this is the letterbox gutter plus the bar's inset; inside
   /// it, just the inset. Continuous at the cap, so nothing jumps as the window
   /// crosses it. Below [wideBreakpoint] there is no bar to align to and
-  /// [compactGutter] applies — pages differ there (16 on the storefront, 20 on
-  /// the food home), so the caller says which.
+  /// [compactGutter] applies — pages differ there (e.g. 16 on lists, 20 on
+  /// cards), so the caller says which.
   static double bodySidePadding(
     double screenWidth, {
     double compactGutter = 16,
@@ -198,35 +180,16 @@ class WebTopNav extends StatelessWidget implements PreferredSizeWidget {
                         const SizedBox(width: _groupGap),
 
                         // ── Zone 1: destinations ──
-                        // All three sit together and behave identically.
-                        // Orders used to be stranded on the right with its
-                        // label permanently off, which made it read as a tool
-                        // rather than a place you can go.
+                        // Indices match DashboardTabs.names.
                         _navItem(Icons.home_rounded, 'home'.tr, 0, showLabels),
                         _navItem(
-                          Icons.favorite_rounded,
-                          'favorites'.tr,
+                          Icons.notifications_rounded,
+                          'notifications'.tr,
                           1,
                           showLabels,
                         ),
-                        _navItem(
-                          Icons.receipt_long_rounded,
-                          'orders'.tr,
-                          3,
-                          showLabels,
-                        ),
 
-                        // ── Zone 2: search ──
-                        // Takes the slack between the two zones; the widest
-                        // single element in the bar, as the primary tool.
-                        Expanded(
-                          child: Center(
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 400),
-                              child: const _TopNavSearchField(),
-                            ),
-                          ),
-                        ),
+                        const Spacer(),
 
                         // ── Zone 3: preferences, then actions ──
                         const SizedBox(width: _groupGap),
@@ -242,10 +205,6 @@ class WebTopNav extends StatelessWidget implements PreferredSizeWidget {
                             color: context.textLight.withValues(alpha: 0.25),
                           ),
                         ),
-                        // Cart last but for the menu: the money action, so it
-                        // gets the corner and a tinted pill rather than
-                        // sitting anonymously among four other icons.
-                        _cartItem(context),
                         _menuButton(),
                         const SizedBox(width: _itemGap),
                       ],
@@ -349,441 +308,6 @@ class WebTopNav extends StatelessWidget implements PreferredSizeWidget {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _cartItem(BuildContext context) {
-    return GetBuilder<CartController>(
-      builder: (cartController) {
-        final itemCount = cartController.itemCount;
-        // Always brand-coloured: it sits on a brand tint, and unlike the
-        // destinations it has no "selected" state to express — tapping it
-        // opens a panel rather than navigating anywhere.
-        const color = ColorResource.primaryDark;
-
-        return Padding(
-          padding: const EdgeInsets.only(left: _itemGap),
-          child: Tooltip(
-            message: 'cart'.tr,
-            child: Material(
-              // A soft brand tint, unlike every other control in the bar. The
-              // cart is the one thing here that leads to a purchase, so it
-              // should be findable at a glance instead of being the fifth
-              // identical grey icon in a row.
-              color: ColorResource.primaryDark.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(Constants.radiusLarge),
-              child: InkWell(
-                // Opens the side panel rather than routing to the cart tab —
-                // see the class doc for why the cart is the exception here.
-                onTap: () => WebCartDrawer.show(context),
-                borderRadius: BorderRadius.circular(Constants.radiusLarge),
-                hoverColor: ColorResource.primaryDark.withValues(alpha: 0.10),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 10,
-                  ),
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Icon(Icons.shopping_cart_rounded, color: color, size: 22),
-                      if (itemCount > 0)
-                        Positioned(
-                          right: -8,
-                          top: -8,
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(
-                              color: ColorResource.error,
-                              shape: BoxShape.circle,
-                            ),
-                            constraints: const BoxConstraints(
-                              minWidth: 16,
-                              minHeight: 16,
-                            ),
-                            child: Center(
-                              child: Text(
-                                itemCount > 99 ? '99+' : '$itemCount',
-                                style: poppinsBold.copyWith(
-                                  fontSize: 9,
-                                  color: ColorResource.textWhite,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// Live search field in the top nav.
-///
-/// Backed by the app-wide [WebSearchBus] controller so the query survives
-/// navigation. Typing shows a product-suggestion dropdown anchored under the
-/// field (fetched live from Appwrite); pressing Enter (or a suggestion, which
-/// fills the field and submits) opens the search page with the full results.
-/// Clearing the field hides the suggestions and closes the search page.
-class _TopNavSearchField extends StatefulWidget {
-  const _TopNavSearchField();
-
-  @override
-  State<_TopNavSearchField> createState() => _TopNavSearchFieldState();
-}
-
-class _TopNavSearchFieldState extends State<_TopNavSearchField> {
-  final LayerLink _layerLink = LayerLink();
-  final OverlayPortalController _suggestionsController =
-      OverlayPortalController();
-  // Per-instance focus node — a single shared node breaks when two nav bars
-  // are mounted at once during a route transition.
-  final FocusNode _focusNode = FocusNode();
-
-  Timer? _debounce;
-  List<ProductModel> _suggestions = [];
-  bool _loadingSuggestions = false;
-  // Guards against out-of-order responses overwriting newer ones.
-  int _queryEpoch = 0;
-
-  bool get _onSearchRoute {
-    final uri = AppRouter.router.routerDelegate.currentConfiguration.uri;
-    return uri.path == AppRouter.search;
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    WebSearchBus.attachFocus(_focusNode);
-  }
-
-  @override
-  void dispose() {
-    WebSearchBus.detachFocus(_focusNode);
-    _focusNode.dispose();
-    _debounce?.cancel();
-    super.dispose();
-  }
-
-  void _handleChanged(String value) {
-    // Rebuild for the clear-button visibility.
-    setState(() {});
-
-    final query = value.trim();
-    _debounce?.cancel();
-
-    if (query.isEmpty) {
-      // Cleared by typing — hide suggestions and close the search page.
-      _hideSuggestions();
-      _closeSearchPageIfOpen();
-      return;
-    }
-
-    _debounce = Timer(
-      const Duration(milliseconds: 300),
-      () => _fetchSuggestions(query),
-    );
-  }
-
-  Future<void> _fetchSuggestions(String query) async {
-    final epoch = ++_queryEpoch;
-    setState(() => _loadingSuggestions = true);
-    if (!_suggestionsController.isShowing) _suggestionsController.show();
-
-    try {
-      final results = await Get.find<ProductController>().searchProducts(query);
-      if (!mounted || epoch != _queryEpoch) return;
-      setState(() {
-        _suggestions = results.take(6).toList();
-        _loadingSuggestions = false;
-      });
-    } catch (_) {
-      if (!mounted || epoch != _queryEpoch) return;
-      setState(() {
-        _suggestions = [];
-        _loadingSuggestions = false;
-      });
-    }
-  }
-
-  void _hideSuggestions() {
-    _queryEpoch++;
-    if (_suggestionsController.isShowing) _suggestionsController.hide();
-    _suggestions = [];
-    _loadingSuggestions = false;
-  }
-
-  /// Submits the current (or given) query: full results on the search page.
-  void _submit([String? queryOverride]) {
-    _debounce?.cancel();
-    if (queryOverride != null) {
-      WebSearchBus.controller.text = queryOverride;
-      WebSearchBus.controller.selection = TextSelection.collapsed(
-        offset: queryOverride.length,
-      );
-    }
-    setState(_hideSuggestions);
-
-    final query = WebSearchBus.controller.text.trim();
-    if (query.isEmpty) return;
-
-    if (WebSearchBus.isReady) {
-      WebSearchBus.submit(query);
-    } else if (!_onSearchRoute) {
-      context.pushNamed(RouteNames.search);
-    }
-  }
-
-  void _clear() {
-    _debounce?.cancel();
-    WebSearchBus.controller.clear();
-    setState(_hideSuggestions);
-    _closeSearchPageIfOpen();
-  }
-
-  void _closeSearchPageIfOpen() {
-    if (_onSearchRoute) {
-      AppRouter.router.pop();
-    }
-    // Keep typing focus after the route (and its nav bar) swaps out.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      WebSearchBus.requestFocus();
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return CompositedTransformTarget(
-      link: _layerLink,
-      child: OverlayPortal(
-        controller: _suggestionsController,
-        overlayChildBuilder: _buildSuggestionsPanel,
-        child: TapRegion(
-          groupId: _TopNavSearchField,
-          child: Container(
-            height: 38,
-            decoration: BoxDecoration(
-              color: context.scaffoldBackground,
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? Colors.white.withValues(alpha: 0.15)
-                    : Colors.black.withValues(alpha: 0.08),
-                // color: context.textLight.withValues(alpha: 0.25),
-              ),
-            ),
-            child: TextField(
-              controller: WebSearchBus.controller,
-              focusNode: _focusNode,
-              onChanged: _handleChanged,
-              onSubmitted: (_) => _submit(),
-              textInputAction: TextInputAction.search,
-              style: poppinsRegular.copyWith(
-                fontSize: Constants.fontSizeDefault,
-                color: context.textPrimary,
-              ),
-              decoration: InputDecoration(
-                hintText: 'search_products'.tr,
-                hintStyle: poppinsRegular.copyWith(
-                  fontSize: Constants.fontSizeDefault,
-                  color: context.textLight,
-                ),
-                isDense: true,
-                border: InputBorder.none,
-                prefixIcon: Icon(
-                  Icons.search_rounded,
-                  size: 18,
-                  color: context.textSecondary,
-                ),
-                prefixIconConstraints: const BoxConstraints(
-                  minWidth: 40,
-                  minHeight: 38,
-                ),
-                suffixIcon: WebSearchBus.controller.text.isNotEmpty
-                    ? InkWell(
-                        onTap: _clear,
-                        borderRadius: BorderRadius.circular(999),
-                        child: Icon(
-                          Icons.close_rounded,
-                          size: 16,
-                          color: context.textSecondary,
-                        ),
-                      )
-                    : null,
-                suffixIconConstraints: const BoxConstraints(
-                  minWidth: 36,
-                  minHeight: 38,
-                ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 9),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── Suggestion dropdown, anchored under the field. ──
-
-  Widget _buildSuggestionsPanel(BuildContext context) {
-    final width = _layerLink.leaderSize?.width ?? 400;
-
-    return Positioned(
-      width: width,
-      child: CompositedTransformFollower(
-        link: _layerLink,
-        targetAnchor: Alignment.bottomLeft,
-        followerAnchor: Alignment.topLeft,
-        offset: const Offset(0, 8),
-        showWhenUnlinked: false,
-        child: TapRegion(
-          groupId: _TopNavSearchField,
-          onTapOutside: (_) => setState(_hideSuggestions),
-          child: Material(
-            color: context.cardBackground,
-            elevation: 10,
-            shadowColor: Colors.black.withValues(alpha: 0.25),
-            borderRadius: BorderRadius.circular(Constants.radiusLarge),
-            clipBehavior: Clip.antiAlias,
-            child: _buildSuggestionsContent(),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSuggestionsContent() {
-    if (_loadingSuggestions && _suggestions.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: ColorResource.primaryDark,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              'searching'.tr,
-              style: poppinsRegular.copyWith(
-                fontSize: Constants.fontSizeSmall,
-                color: context.textSecondary,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (_suggestions.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Icon(Icons.search_off_rounded, size: 18, color: context.textLight),
-            const SizedBox(width: 12),
-            Text(
-              'no_results_found'.tr,
-              style: poppinsRegular.copyWith(
-                fontSize: Constants.fontSizeSmall,
-                color: context.textSecondary,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final product in _suggestions) _suggestionTile(product),
-        Divider(height: 1, color: context.textLight.withValues(alpha: 0.2)),
-        // Footer — run the full search for what's typed.
-        InkWell(
-          onTap: _submit,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.search_rounded,
-                  size: 18,
-                  color: ColorResource.primaryDark,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    '${'see_all_results_for'.tr} "${WebSearchBus.controller.text.trim()}"',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: poppinsMedium.copyWith(
-                      fontSize: Constants.fontSizeSmall,
-                      color: ColorResource.primaryDark,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // Tapping a suggestion fills the field with the product name and runs the
-  // full search for it (Google-style query suggestion).
-  Widget _suggestionTile(ProductModel product) {
-    final name = product.nameMap.trLanguage;
-
-    return InkWell(
-      onTap: () => _submit(name),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(Constants.radiusDefault),
-              child: CustomNetworkImage(
-                image: product.imageId,
-                width: 36,
-                height: 36,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: poppinsMedium.copyWith(
-                  fontSize: Constants.fontSizeSmall,
-                  color: context.textPrimary,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              PriceHelper.formatPrice(product.finalPrice),
-              style: poppinsBold.copyWith(
-                fontSize: Constants.fontSizeSmall,
-                color: ColorResource.primaryDark,
-              ),
-            ),
-          ],
         ),
       ),
     );

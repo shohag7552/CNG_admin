@@ -1,14 +1,13 @@
-import 'package:kikomart_user_app/app/common/widgets/auth_dialog.dart';
-import 'package:kikomart_user_app/app/controllers/auth_controller.dart';
-import 'package:kikomart_user_app/app/controllers/localization_controller.dart';
-import 'package:kikomart_user_app/app/controllers/policy_controller.dart';
-import 'package:kikomart_user_app/app/controllers/profile_controller.dart';
-import 'package:kikomart_user_app/app/helper/currency_helper.dart';
-import 'package:kikomart_user_app/app/helper/routes/app_router.dart';
-import 'package:kikomart_user_app/app/resources/colors.dart';
-import 'package:kikomart_user_app/app/resources/constants.dart';
-import 'package:kikomart_user_app/app/resources/text_style.dart';
-import 'package:kikomart_user_app/app/modules/language/widgets/language_selector.dart';
+import 'package:appwrite_boilerplate/app/common/widgets/auth_dialog.dart';
+import 'package:appwrite_boilerplate/app/controllers/auth_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/localization_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/policy_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/profile_controller.dart';
+import 'package:appwrite_boilerplate/app/helper/routes/app_router.dart';
+import 'package:appwrite_boilerplate/app/resources/colors.dart';
+import 'package:appwrite_boilerplate/app/resources/constants.dart';
+import 'package:appwrite_boilerplate/app/resources/text_style.dart';
+import 'package:appwrite_boilerplate/app/modules/language/widgets/language_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
@@ -74,51 +73,6 @@ class _WebProfileDrawerState extends State<WebProfileDrawer> {
                       onTap: _authGuard(isLoggedIn, () {
                         _close();
                         context.pushNamed(RouteNames.addresses);
-                      }),
-                    ),
-
-                    // ── Orders & Activity ─────────────────────────────────────
-                    _sectionLabel('orders_and_activity'.tr, isDark),
-                    _item(
-                      icon: Icons.history,
-                      title: 'order_history'.tr,
-                      subtitle: 'order_history_subtitle'.tr,
-                      onTap: _authGuard(isLoggedIn, () {
-                        _close();
-                        context.pushNamed(RouteNames.orderHistory);
-                      }),
-                    ),
-                    _item(
-                      icon: Icons.favorite_outline,
-                      title: 'favorites'.tr,
-                      subtitle: 'favorites_subtitle'.tr,
-                      onTap: _authGuard(isLoggedIn, () {
-                        _close();
-                        context.pushNamed(
-                          RouteNames.favorites,
-                          queryParameters: {'fromMenu': 'true'},
-                        );
-                      }),
-                    ),
-
-                    // ── Offers & Rewards ──────────────────────────────────────
-                    _sectionLabel('offers_and_rewards'.tr, isDark),
-                    _item(
-                      icon: Icons.local_offer_outlined,
-                      title: 'coupons'.tr,
-                      subtitle: 'view_and_apply_promo_codes'.tr,
-                      onTap: _authGuard(isLoggedIn, () {
-                        _close();
-                        context.pushNamed(RouteNames.coupons);
-                      }),
-                    ),
-                    _item(
-                      icon: Icons.card_giftcard_outlined,
-                      title: 'loyalty_points'.tr,
-                      subtitle: 'earn_and_redeem_points'.tr,
-                      onTap: _authGuard(isLoggedIn, () {
-                        _close();
-                        context.pushNamed(RouteNames.loyalty);
                       }),
                     ),
 
@@ -317,7 +271,7 @@ class _WebProfileDrawerState extends State<WebProfileDrawer> {
               const SizedBox(height: 4),
               Text(
                 isLoggedIn
-                    ? '${'balance'.tr}: ${CurrencyHelper.formatWithSeparators(user?.walletBalance ?? 0)}'
+                    ? (user?.email ?? '')
                     : 'browsing_as_guest'.tr,
                 style: poppinsRegular.copyWith(
                   fontSize: Constants.fontSizeDefault,

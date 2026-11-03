@@ -1,7 +1,7 @@
 import 'dart:developer';
 
-import 'package:kikomart_user_app/app/models/privacy_policy_model.dart';
-import 'package:kikomart_user_app/app/modules/policies/domain/repository/policy_repo_interface.dart';
+import 'package:appwrite_boilerplate/app/models/privacy_policy_model.dart';
+import 'package:appwrite_boilerplate/app/modules/policies/domain/repository/policy_repo_interface.dart';
 import 'package:get/get.dart';
 
 class PolicyController extends GetxController {

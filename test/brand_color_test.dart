@@ -1,13 +1,12 @@
-import 'package:kikomart_user_app/app/resources/colors.dart';
-import 'package:kikomart_user_app/app/resources/constants.dart';
+import 'package:appwrite_boilerplate/app/resources/colors.dart';
+import 'package:appwrite_boilerplate/app/resources/constants.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// Pins the two promises the brand palette makes:
+/// Pins the promise the brand palette makes:
 ///
-///  1. `Constants.primaryColorValue` is the only knob — every other brand
-///     token is derived from it, so a rebrand cannot leave a stale colour behind.
-///  2. Deriving them changed no pixel for the shipped brand.
+///  `Constants.primaryColorValue` is the only knob — every other brand token
+///  is derived from it, so a rebrand cannot leave a stale colour behind.
 void main() {
   test('every brand token derives from Constants.primaryColorValue', () {
     const Color brand = Color(Constants.primaryColorValue);
@@ -24,12 +23,6 @@ void main() {
     // 0xFF003B55 — a leftover blue — while only shade 500 tracked the brand.
     expect(ColorResource.primarySwatch.toARGB32(), brand.toARGB32());
     expect(ColorResource.primarySwatch[500], brand);
-  });
-
-  test('the shipped brand keeps its exact previous accent steps', () {
-    expect(ColorResource.primaryDark, const Color(0xFFC92A2A));
-    expect(ColorResource.primaryMedium, const Color(0xFFE03131));
-    expect(ColorResource.primaryLight, const Color(0xFFF03E3E));
   });
 
   test('the swatch runs light to dark through the brand', () {

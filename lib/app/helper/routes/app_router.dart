@@ -1,56 +1,25 @@
-import 'package:kikomart_user_app/app/controllers/settings_controller.dart';
-import 'package:kikomart_user_app/app/controllers/brand_controller.dart';
-import 'package:kikomart_user_app/app/controllers/category_controller.dart';
-import 'package:kikomart_user_app/app/controllers/coupon_controller.dart';
-import 'package:kikomart_user_app/app/controllers/policy_controller.dart';
-import 'package:kikomart_user_app/app/controllers/product_controller.dart';
-import 'package:kikomart_user_app/app/helper/dashboard_tab_bus.dart';
-import 'package:kikomart_user_app/app/models/address_model.dart';
-import 'package:kikomart_user_app/app/models/brand_model.dart';
-import 'package:kikomart_user_app/app/models/category_model.dart';
-import 'package:kikomart_user_app/app/models/coupon_model.dart';
-import 'package:kikomart_user_app/app/models/order_model.dart';
-import 'package:kikomart_user_app/app/models/product_model.dart';
-import 'package:kikomart_user_app/app/models/cart_item_model.dart';
-import 'package:kikomart_user_app/app/modules/address/screens/add_edit_address_page.dart';
-import 'package:kikomart_user_app/app/modules/address/screens/addresses_page.dart';
-import 'package:kikomart_user_app/app/modules/address/screens/full_screen_map_page.dart';
-import 'package:kikomart_user_app/app/modules/auth/screens/forgot_password_screen.dart';
-import 'package:kikomart_user_app/app/modules/auth/screens/reset_password_screen.dart';
-import 'package:kikomart_user_app/app/modules/auth/screens/login_screen.dart';
-import 'package:kikomart_user_app/app/modules/auth/screens/signup_screen.dart';
-import 'package:kikomart_user_app/app/modules/brands/screens/brand_products_page.dart';
-import 'package:kikomart_user_app/app/modules/cart/screens/cart_page.dart';
-import 'package:kikomart_user_app/app/modules/categories/screens/category_products_page.dart';
-import 'package:kikomart_user_app/app/modules/categories/screens/category_screen.dart';
-import 'package:kikomart_user_app/app/modules/checkout/screens/checkout_page.dart';
-import 'package:kikomart_user_app/app/modules/checkout/screens/order_failed_page.dart';
-import 'package:kikomart_user_app/app/modules/checkout/screens/order_success_page.dart';
-import 'package:kikomart_user_app/app/modules/coupons/screens/coupon_details_screen.dart';
-import 'package:kikomart_user_app/app/modules/coupons/screens/coupons_screen.dart';
-import 'package:kikomart_user_app/app/modules/dashboard/screens/dashboard_screen.dart';
-import 'package:kikomart_user_app/app/modules/dashboard/widgets/full_screen_image_viewer.dart';
-import 'package:kikomart_user_app/app/modules/ecommerce/screens/ecommerce_product_detail_page.dart';
-import 'package:kikomart_user_app/app/modules/favorites/screens/favorites_screen.dart';
-import 'package:kikomart_user_app/app/modules/flash_sale/screens/flash_sale_screen.dart';
-import 'package:kikomart_user_app/app/modules/language/screens/language_screen.dart';
-import 'package:kikomart_user_app/app/modules/loyalty_point/screens/loyalty_points_page.dart';
-import 'package:kikomart_user_app/app/modules/notification/screens/notification_screen.dart';
-import 'package:kikomart_user_app/app/modules/orders/screens/order_delivery_map_page.dart';
-import 'package:kikomart_user_app/app/modules/orders/screens/order_detail_page.dart';
-import 'package:kikomart_user_app/app/modules/orders/screens/order_history_page.dart';
-import 'package:kikomart_user_app/app/modules/orders/screens/orders_page.dart';
-import 'package:kikomart_user_app/app/modules/payment/payment_webview_screen.dart';
-import 'package:kikomart_user_app/app/modules/payment/screens/payment_return_page.dart';
-import 'package:kikomart_user_app/app/modules/help_support/screens/help_support_screen.dart';
-import 'package:kikomart_user_app/app/modules/policies/screens/policy_content_screen.dart';
-import 'package:kikomart_user_app/app/modules/profile/screens/edit_profile_page.dart';
-import 'package:kikomart_user_app/app/modules/search/screens/search_page.dart';
-import 'package:kikomart_user_app/app/modules/maintenance/screens/maintenance_screen.dart';
-import 'package:kikomart_user_app/app/modules/splash/screens/splash_screen.dart';
-import 'package:kikomart_user_app/app/modules/update/screens/force_update_screen.dart';
-import 'package:kikomart_user_app/app/resources/colors.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:appwrite_boilerplate/app/controllers/settings_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/policy_controller.dart';
+import 'package:appwrite_boilerplate/app/helper/dashboard_tab_bus.dart';
+import 'package:appwrite_boilerplate/app/models/address_model.dart';
+import 'package:appwrite_boilerplate/app/modules/address/screens/add_edit_address_page.dart';
+import 'package:appwrite_boilerplate/app/modules/address/screens/addresses_page.dart';
+import 'package:appwrite_boilerplate/app/modules/address/screens/full_screen_map_page.dart';
+import 'package:appwrite_boilerplate/app/modules/auth/screens/forgot_password_screen.dart';
+import 'package:appwrite_boilerplate/app/modules/auth/screens/reset_password_screen.dart';
+import 'package:appwrite_boilerplate/app/modules/auth/screens/login_screen.dart';
+import 'package:appwrite_boilerplate/app/modules/auth/screens/signup_screen.dart';
+import 'package:appwrite_boilerplate/app/modules/dashboard/screens/dashboard_screen.dart';
+import 'package:appwrite_boilerplate/app/modules/dashboard/widgets/full_screen_image_viewer.dart';
+import 'package:appwrite_boilerplate/app/modules/language/screens/language_screen.dart';
+import 'package:appwrite_boilerplate/app/modules/notification/screens/notification_screen.dart';
+import 'package:appwrite_boilerplate/app/modules/help_support/screens/help_support_screen.dart';
+import 'package:appwrite_boilerplate/app/modules/policies/screens/policy_content_screen.dart';
+import 'package:appwrite_boilerplate/app/modules/profile/screens/edit_profile_page.dart';
+import 'package:appwrite_boilerplate/app/modules/maintenance/screens/maintenance_screen.dart';
+import 'package:appwrite_boilerplate/app/modules/splash/screens/splash_screen.dart';
+import 'package:appwrite_boilerplate/app/modules/update/screens/force_update_screen.dart';
+import 'package:appwrite_boilerplate/app/resources/colors.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
@@ -72,37 +41,15 @@ abstract class RouteNames {
   static const forgotPassword = 'forgot-password';
   static const resetPassword = 'reset-password';
   static const dashboard = 'dashboard';
-  static const search = 'search';
-  static const categories = 'categories';
-  static const category = 'category';
-  static const brand = 'brand';
-  static const flashSale = 'flash-sale';
-  static const productDetail = 'product-detail';
-  static const cart = 'cart';
-  static const checkout = 'checkout';
-  static const orderSuccess = 'order-success';
-  static const orderFailed = 'order-failed';
-  static const orders = 'orders';
-  static const orderHistory = 'order-history';
-  static const orderDetail = 'order-detail';
-  static const deliveryMap = 'delivery-map';
   static const editProfile = 'edit-profile';
   static const addresses = 'addresses';
   static const addEditAddress = 'add-edit-address';
-  static const favorites = 'favorites';
   static const notifications = 'notifications';
-  static const loyalty = 'loyalty-points';
   static const language = 'language';
-  static const coupons = 'coupons';
-  static const couponDetails = 'coupon-details';
   static const policy = 'policy';
   static const helpSupport = 'help-support';
   static const mapPicker = 'map-picker';
   static const imageViewer = 'image-viewer';
-  static const payment = 'payment';
-  static const paymentSuccess = 'payment-success';
-  static const paymentFail = 'payment-fail';
-  static const paymentCancel = 'payment-cancel';
 }
 
 // ── Argument bundles for routes that carry more than one non-URL value. ──
@@ -117,35 +64,6 @@ abstract class PolicyType {
   static const aboutUs = 'about-us';
   static const terms = 'terms';
   static const privacy = 'privacy';
-}
-
-class OrderSuccessArgs {
-  final String orderNumber;
-  final double totalAmount;
-  const OrderSuccessArgs({required this.orderNumber, required this.totalAmount});
-}
-
-class OrderFailedArgs {
-  final String errorMessage;
-  final VoidCallback? onRetry;
-  const OrderFailedArgs({required this.errorMessage, this.onRetry});
-}
-
-class CouponsArgs {
-  final bool isSelectionMode;
-  final void Function(CouponModel coupon)? onCouponSelected;
-  const CouponsArgs({this.isSelectionMode = false, this.onCouponSelected});
-}
-
-class CouponDetailsArgs {
-  final CouponModel coupon;
-  final bool isSelectionMode;
-  final void Function(CouponModel coupon)? onSelect;
-  const CouponDetailsArgs({
-    required this.coupon,
-    this.isSelectionMode = false,
-    this.onSelect,
-  });
 }
 
 class ImageViewerArgs {
@@ -169,33 +87,6 @@ class ImageViewerArgs {
   ImageViewerArgs.single({required String imageUrl, required this.heroTag})
       : images = [imageUrl],
         initialIndex = 0;
-}
-
-class PaymentArgs {
-  final String paymentURL;
-  final String gatewayName;
-  const PaymentArgs({required this.paymentURL, required this.gatewayName});
-}
-
-class DeliveryMapArgs {
-  final DeliverymanInfo? deliveryman;
-  final String businessName;
-  final String businessAddress;
-  final double businessLatitude;
-  final double businessLongitude;
-  final String deliveryAddress;
-  final double deliveryLatitude;
-  final double deliveryLongitude;
-  const DeliveryMapArgs({
-    required this.deliveryman,
-    required this.businessName,
-    required this.businessAddress,
-    required this.businessLatitude,
-    required this.businessLongitude,
-    required this.deliveryAddress,
-    required this.deliveryLatitude,
-    required this.deliveryLongitude,
-  });
 }
 
 /// Central app router.
@@ -232,43 +123,15 @@ abstract class AppRouter {
   /// `web/.well-known/apple-app-site-association`.
   static const String resetPassword = '/reset-password';
   static const String dashboard = '/';
-  static const String search = '/search';
-  static const String categories = '/categories';
-  static const String categoryPath = '/category/:id';
-  static const String brandPath = '/brand/:id';
-  static const String flashSale = '/flash-sale';
-  static const String productDetailPath = '/product/:id';
-  static const String cart = '/cart';
-  static const String checkout = '/checkout';
-  static const String orderSuccess = '/order-success';
-  static const String orderFailed = '/order-failed';
-  static const String orders = '/orders';
-  static const String orderHistory = '/order-history';
-  static const String orderDetailPath = '/orders/:id';
-  static const String deliveryMap = '/delivery-map';
   static const String editProfile = '/edit-profile';
   static const String addresses = '/addresses';
   static const String addEditAddress = '/addresses/edit';
-  static const String favorites = '/favorites';
   static const String notifications = '/notifications';
-  static const String loyalty = '/loyalty-points';
   static const String language = '/language';
-  static const String coupons = '/coupons';
-  static const String couponDetailsPath = '/coupons/:id';
   static const String policyPath = '/policy/:type';
   static const String helpSupport = '/help-support';
   static const String mapPicker = '/map-picker';
   static const String imageViewer = '/image-viewer';
-  static const String payment = '/payment';
-
-  // Where the payment function sends the customer back to. On web these load
-  // as real pages and finish the order; on mobile the in-app WebView matches
-  // the same paths and pops before they ever load. Keep them in step with
-  // `PaymentService.successPath` / `failPath` / `cancelPath` and with the
-  // callback URLs configured on the payment function itself.
-  static const String paymentSuccess = '/payment/success';
-  static const String paymentFail = '/payment/fail';
-  static const String paymentCancel = '/payment/cancel';
 
   static final GoRouter router = GoRouter(
     navigatorKey: rootNavigatorKey,
@@ -328,161 +191,12 @@ abstract class AppRouter {
       GoRoute(
         path: dashboard,
         name: RouteNames.dashboard,
-        // `?tab=cart` (etc.) selects a dashboard tab, making every tab a
+        // `?tab=profile` (etc.) selects a dashboard tab, making every tab a
         // shareable URL; no parameter means "leave the current tab alone".
         builder: (context, state) => DashboardScreen(
           initialTab:
               DashboardTabs.indexFromName(state.uri.queryParameters['tab']),
         ),
-      ),
-      GoRoute(
-        path: search,
-        name: RouteNames.search,
-        builder: (context, state) => const SearchPage(),
-      ),
-      GoRoute(
-        path: categories,
-        name: RouteNames.categories,
-        builder: (context, state) => const CategoryScreen(),
-      ),
-      GoRoute(
-        path: flashSale,
-        name: RouteNames.flashSale,
-        builder: (context, state) => const FlashSaleScreen(),
-      ),
-      GoRoute(
-        path: categoryPath,
-        name: RouteNames.category,
-        // `extra` carries the already-loaded model for instant render on
-        // in-app navigation; a cold deep link hydrates it from the URL id.
-        builder: (context, state) {
-          final category = state.extra;
-          if (category is CategoryModel) {
-            return CategoryProductsPage(category: category);
-          }
-          return _DeepLinkLoader<CategoryModel>(
-            fetch: () => Get.find<CategoryController>()
-                .getCategoryById(state.pathParameters['id']!),
-            notFoundKey: 'category_not_found',
-            builder: (category) => CategoryProductsPage(category: category),
-          );
-        },
-      ),
-      GoRoute(
-        path: brandPath,
-        name: RouteNames.brand,
-        // `extra` carries the already-loaded model for instant render on
-        // in-app navigation; a cold deep link hydrates it from the URL id.
-        builder: (context, state) {
-          final brand = state.extra;
-          if (brand is BrandModel) {
-            return BrandProductsPage(brand: brand);
-          }
-          return _DeepLinkLoader<BrandModel>(
-            fetch: () => Get.find<BrandController>()
-                .getBrandById(state.pathParameters['id']!),
-            notFoundKey: 'brand_not_found',
-            builder: (brand) => BrandProductsPage(brand: brand),
-          );
-        },
-      ),
-      GoRoute(
-        path: productDetailPath,
-        name: RouteNames.productDetail,
-        builder: (context, state) {
-          final extra = state.extra;
-          if (extra is ProductModel) {
-            return EcommerceProductDetailPage(product: extra);
-          }
-          // Opened from a cart line: show that line's configuration.
-          if (extra case (ProductModel product, CartItemModel cartItem)) {
-            return EcommerceProductDetailPage(
-              product: product,
-              cartItem: cartItem,
-            );
-          }
-          return _DeepLinkLoader<ProductModel>(
-            fetch: () => Get.find<ProductController>()
-                .getProductById(state.pathParameters['id']!),
-            notFoundKey: 'product_not_found',
-            builder: (product) => EcommerceProductDetailPage(product: product),
-          );
-        },
-      ),
-      GoRoute(
-        path: cart,
-        name: RouteNames.cart,
-        builder: (context, state) => const CartPage(),
-      ),
-      GoRoute(
-        path: checkout,
-        name: RouteNames.checkout,
-        builder: (context, state) => const CheckoutPage(),
-      ),
-      GoRoute(
-        path: orderSuccess,
-        name: RouteNames.orderSuccess,
-        redirect: (context, state) =>
-            state.extra is OrderSuccessArgs ? null : dashboard,
-        builder: (context, state) {
-          final args = state.extra as OrderSuccessArgs;
-          return OrderSuccessPage(
-            orderNumber: args.orderNumber,
-            totalAmount: args.totalAmount,
-          );
-        },
-      ),
-      GoRoute(
-        path: orderFailed,
-        name: RouteNames.orderFailed,
-        redirect: (context, state) =>
-            state.extra is OrderFailedArgs ? null : dashboard,
-        builder: (context, state) {
-          final args = state.extra as OrderFailedArgs;
-          return OrderFailedPage(
-            errorMessage: args.errorMessage,
-            onRetry: args.onRetry,
-          );
-        },
-      ),
-      GoRoute(
-        path: orders,
-        name: RouteNames.orders,
-        // Its own route, so it renders the web header/footer itself —
-        // the dashboard shell is not around it here.
-        builder: (context, state) => const OrdersPage(isStandalone: true),
-      ),
-      GoRoute(
-        path: orderHistory,
-        name: RouteNames.orderHistory,
-        builder: (context, state) => const OrderHistoryPage(),
-      ),
-      GoRoute(
-        path: orderDetailPath,
-        name: RouteNames.orderDetail,
-        builder: (context, state) => OrderDetailPage(
-          orderId: state.pathParameters['id']!,
-          initialOrder: state.extra as OrderModel?,
-        ),
-      ),
-      GoRoute(
-        path: deliveryMap,
-        name: RouteNames.deliveryMap,
-        redirect: (context, state) =>
-            state.extra is DeliveryMapArgs ? null : dashboard,
-        builder: (context, state) {
-          final args = state.extra as DeliveryMapArgs;
-          return OrderDeliveryMapPage(
-            deliveryman: args.deliveryman,
-            businessName: args.businessName,
-            businessAddress: args.businessAddress,
-            businessLatitude: args.businessLatitude,
-            businessLongitude: args.businessLongitude,
-            deliveryAddress: args.deliveryAddress,
-            deliveryLatitude: args.deliveryLatitude,
-            deliveryLongitude: args.deliveryLongitude,
-          );
-        },
       ),
       GoRoute(
         path: editProfile,
@@ -501,60 +215,14 @@ abstract class AppRouter {
             AddEditAddressPage(address: state.extra as AddressModel?),
       ),
       GoRoute(
-        path: favorites,
-        name: RouteNames.favorites,
-        builder: (context, state) => FavoritesScreen(
-          isFromMenu: state.uri.queryParameters['fromMenu'] == 'true',
-        ),
-      ),
-      GoRoute(
         path: notifications,
         name: RouteNames.notifications,
         builder: (context, state) => const NotificationScreen(),
       ),
       GoRoute(
-        path: loyalty,
-        name: RouteNames.loyalty,
-        builder: (context, state) => const LoyaltyPointsPage(),
-      ),
-      GoRoute(
         path: language,
         name: RouteNames.language,
         builder: (context, state) => const LanguageScreen(),
-      ),
-      GoRoute(
-        path: coupons,
-        name: RouteNames.coupons,
-        builder: (context, state) {
-          final args = state.extra as CouponsArgs?;
-          return CouponsScreen(
-            isSelectionMode: args?.isSelectionMode ?? false,
-            onCouponSelected: args?.onCouponSelected,
-          );
-        },
-      ),
-      GoRoute(
-        path: couponDetailsPath,
-        name: RouteNames.couponDetails,
-        builder: (context, state) {
-          // Fast path: in-app navigation carries the coupon (plus selection
-          // callbacks, which cannot survive a URL). Cold deep links hydrate
-          // the coupon from the id and open in plain view mode.
-          final args = state.extra;
-          if (args is CouponDetailsArgs) {
-            return CouponDetailsScreen(
-              coupon: args.coupon,
-              isSelectionMode: args.isSelectionMode,
-              onSelect: args.onSelect,
-            );
-          }
-          return _DeepLinkLoader<CouponModel>(
-            fetch: () => Get.find<CouponController>()
-                .getCouponById(state.pathParameters['id']!),
-            notFoundKey: 'coupon_not_found',
-            builder: (coupon) => CouponDetailsScreen(coupon: coupon),
-          );
-        },
       ),
       GoRoute(
         path: policyPath,
@@ -616,45 +284,6 @@ abstract class AppRouter {
             heroTag: args.heroTag,
           );
         },
-      ),
-      GoRoute(
-        path: payment,
-        name: RouteNames.payment,
-        // Mobile only: web pays in the full tab (see checkout) and returns on
-        // /payment/success — the in-app WebView is never used there.
-        redirect: (context, state) {
-          if (kIsWeb) return checkout;
-          return state.extra is PaymentArgs ? null : dashboard;
-        },
-        builder: (context, state) {
-          final args = state.extra as PaymentArgs;
-          return PaymentWebViewScreen(
-            paymentURL: args.paymentURL,
-            gatewayName: args.gatewayName,
-          );
-        },
-      ),
-      GoRoute(
-        path: paymentSuccess,
-        name: RouteNames.paymentSuccess,
-        // Stripe appends ?session_id=cs_… — the page verifies it before
-        // writing any order.
-        builder: (context, state) => PaymentReturnPage(
-          result: PaymentResult.success,
-          sessionId: state.uri.queryParameters['session_id'],
-        ),
-      ),
-      GoRoute(
-        path: paymentFail,
-        name: RouteNames.paymentFail,
-        builder: (context, state) =>
-            const PaymentReturnPage(result: PaymentResult.failed),
-      ),
-      GoRoute(
-        path: paymentCancel,
-        name: RouteNames.paymentCancel,
-        builder: (context, state) =>
-            const PaymentReturnPage(result: PaymentResult.cancelled),
       ),
     ],
   );

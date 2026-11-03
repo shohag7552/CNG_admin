@@ -1,5 +1,5 @@
-import 'package:kikomart_user_app/app/resources/colors.dart';
-import 'package:kikomart_user_app/app/resources/text_style.dart';
+import 'package:appwrite_boilerplate/app/resources/colors.dart';
+import 'package:appwrite_boilerplate/app/resources/text_style.dart';
 import 'package:flutter/material.dart';
 
 class CustomButton extends StatelessWidget {
@@ -24,7 +24,7 @@ class CustomButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
           ),
           elevation: elevation,
-          shadowColor: ColorResource.primary.withOpacity(0.5),
+          shadowColor: ColorResource.primary.withValues(alpha: 0.5),
         ),
         child: isLoading
             ? SizedBox(

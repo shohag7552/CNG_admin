@@ -1,5 +1,5 @@
 
-import 'package:kikomart_user_app/app/modules/splash/domain/repository/splash_repo_interface.dart';
+import 'package:appwrite_boilerplate/app/modules/splash/domain/repository/splash_repo_interface.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SplashRepository implements SplashRepoInterface {

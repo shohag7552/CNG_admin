@@ -1,14 +1,14 @@
 import 'dart:async';
 
-import 'package:kikomart_user_app/app/controllers/auth_controller.dart';
-import 'package:kikomart_user_app/app/controllers/settings_controller.dart';
-import 'package:kikomart_user_app/app/controllers/splash_controller.dart';
-import 'package:kikomart_user_app/app/controllers/update_controller.dart';
-import 'package:kikomart_user_app/app/helper/routes/app_router.dart';
-import 'package:kikomart_user_app/app/resources/colors.dart';
-import 'package:kikomart_user_app/app/resources/constants.dart';
-import 'package:kikomart_user_app/app/resources/images.dart';
-import 'package:kikomart_user_app/app/resources/text_style.dart';
+import 'package:appwrite_boilerplate/app/controllers/auth_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/settings_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/splash_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/update_controller.dart';
+import 'package:appwrite_boilerplate/app/helper/routes/app_router.dart';
+import 'package:appwrite_boilerplate/app/resources/colors.dart';
+import 'package:appwrite_boilerplate/app/resources/constants.dart';
+import 'package:appwrite_boilerplate/app/resources/images.dart';
+import 'package:appwrite_boilerplate/app/resources/text_style.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -136,8 +136,8 @@ class _SplashScreenState extends State<SplashScreen> {
       return;
     }
 
-    // Always open on the dashboard so guests can browse products. Signing in is
-    // requested only when an action requires it (checkout, favorites, profile…).
+    // Always open on the dashboard so guests can browse. Signing in is
+    // requested only when an action requires it (e.g. editing the profile).
     AppRouter.router.goNamed(RouteNames.dashboard);
   }
 

@@ -8,7 +8,7 @@ just always lands in the browser on the deployed web build.
 ## Files
 
 - **`assetlinks.json`** — Android App Links. Lists the SHA-256 fingerprints
-  allowed to claim links for `com.kikomart.user`.
+  allowed to claim links for `com.example.appwrite_boilerplate`.
 - **`apple-app-site-association`** — iOS Universal Links. **No file extension**
   by design; `firebase.json` pins its `Content-Type` to `application/json`
   because Firebase would otherwise serve it as `application/octet-stream`,
@@ -57,7 +57,7 @@ Play-signed builds are covered simultaneously.
 - The **Apple Team ID** (`DEVELOPMENT_TEAM = U7VLRFHZG7` is already in
   `ios/Runner.xcodeproj/project.pbxproj` — confirm it owns the App ID).
 - The **real bundle id**. It is still the placeholder
-  `com.example.foodUserApp`; this must change before the App ID can be
+  `com.example.appwriteBoilerplate`; this must change before the App ID can be
   registered with the Associated Domains capability.
 
 Until both are filled in, iOS Universal Links will not verify. Android is

@@ -1,8 +1,0 @@
-import 'package:kikomart_user_app/app/models/category_model.dart';
-
-abstract class CategoryRepoInterface {
-  Future<List<CategoryModel>> getCategories();
-
-  /// Fetch a single category by its document id (deep-link hydration)
-  Future<CategoryModel?> getCategoryById(String id);
-}

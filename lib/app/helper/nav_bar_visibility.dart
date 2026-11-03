@@ -1,4 +1,4 @@
-import 'package:kikomart_user_app/app/resources/constants.dart';
+import 'package:appwrite_boilerplate/app/resources/constants.dart';
 import 'package:flutter/material.dart';
 
 /// Shared visibility of the floating bottom navigation bar.

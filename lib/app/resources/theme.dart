@@ -1,4 +1,4 @@
-import 'package:kikomart_user_app/app/resources/colors.dart';
+import 'package:appwrite_boilerplate/app/resources/colors.dart';
 import 'package:flutter/material.dart';
 
 ThemeData lightTheme = _buildTheme(brightness: Brightness.light);

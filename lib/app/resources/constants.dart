@@ -1,66 +1,55 @@
 
-import 'package:kikomart_user_app/app/resources/images.dart';
+import 'package:appwrite_boilerplate/app/resources/images.dart';
 
 /// App-wide configuration.
 ///
-/// **Do not import Flutter into this file.** The ids below are mirrored from
-/// the store-admin app, whose `lib/scripts/seed_database.dart` owns this
-/// database's schema and runs on the standalone Dart VM — no `dart:ui` there,
-/// so a single `package:flutter/...` import fails with a wall of errors from
-/// inside Flutter's own sources. Keeping this file Flutter-free means it (and
-/// `AppwriteConfig`, which re-exports it) stays readable from plain Dart
-/// tooling on either side. That is why the brand colour is stored as an `int`
-/// and wrapped in a `Color` over in `resources/colors.dart`.
+/// **Do not import Flutter into this file.** Keeping it Flutter-free lets
+/// plain-Dart tooling (seed scripts, server Functions) import the same ids.
+/// That is why the brand colour is an `int`, wrapped in a `Color` in
+/// `resources/colors.dart`.
 class Constants {
+  // ═════════════════════════════════════════════════════════════════════════
+  //  PROJECT CONFIG — the only block you must edit for a new project.
+  //  See README.md › "Start a new project".
+  // ═════════════════════════════════════════════════════════════════════════
 
-  static const String appName = 'KikoMart';
+  static const String appName = 'Appwrite Boilerplate';
+
+  /// Keep in sync with `version:` in pubspec.yaml — drives force-update.
   static const String appVersion = "1.0.0";
-  static const String packageName = 'com.kikomart.user';
-  static const String webBaseUrl = 'https://kiko-mart-user.appwrite.network';
+  static const String packageName = 'com.example.appwrite_boilerplate';
 
-  static const int primaryColorValue = 0xFFC92A2A;
+  /// Deployed Flutter web build (share links, password-recovery links).
+  static const String webBaseUrl = 'https://your-app.appwrite.network';
 
-  static const String projectId = '6aa44c20000b0b73b432';
-  static const String endpoint = 'https://fra.cloud.appwrite.io/v1';
-  static const String databaseId = '6aa44dc40005d989a0e4';
+  /// Brand colour as an int (this file stays Flutter-free, see above).
+  static const int primaryColorValue = 0xFF2563EB;
+
+  // ── Appwrite ── (Console › Project › Settings)
+  static const String endpoint = 'https://cloud.appwrite.io/v1';
+  static const String projectId = 'YOUR_PROJECT_ID';
+  static const String databaseId = 'YOUR_DATABASE_ID';
   // No Appwrite API key here: a key compiled into a client app can be
   // extracted by anyone. Server keys live only in Function environments.
 
-  /// Alias of [databaseId], kept because callers use both spellings. Derived
-  /// rather than repeated so the two can never drift apart.
+  /// Alias of [databaseId], kept because callers use both spellings.
   static const String dbId = databaseId;
 
-  /// Storage bucket for every uploaded image (products, banners, logos).
-  static const String postsBucketId = '6aa44e8d0013091f9c27';
+  /// Storage bucket for uploaded images (avatars, etc.).
+  static const String storageBucketId = 'YOUR_BUCKET_ID';
 
-  /// FCM push plumbing.
-  static const String messagingProviderId = '6aa451f2002cbb748e9d';
-  static const String notificationFunctionId = 'notification_function1';
+  /// FCM push plumbing (Appwrite Messaging). Leave as-is until push is set up.
+  static const String messagingProviderId = 'YOUR_FCM_PROVIDER_ID';
+  static const String notificationFunctionId = 'YOUR_NOTIFICATION_FUNCTION_ID';
 
-  /// Topic customers subscribe to for promotional broadcasts. The store app
-  /// calls this same id `broadCastTopicId`.
-  static const String topicId = '6aa5a40a00120693b5eb';
+  /// Topic every user device subscribes to for broadcast pushes.
+  static const String topicId = 'YOUR_BROADCAST_TOPIC_ID';
 
-  /// Topic every store-admin device subscribes to — carries new-order alerts.
-  static const String storeAdminTopicId = '6aa5a4aa003371f66577';
-
-  /// Processes Stripe payments via a cloud function. Customer-app only — the
-  /// store app has no counterpart for this one.
-  static const String stripePaymentFunctionId = '6ab68f360015285299a5';
-
-  /// Host the gateway returns the customer to, as
-  /// `<host>/payment/success|fail|cancel`.
-  ///
-  /// This is the web app itself, not the payment function's own domain, and it
-  /// has to be: on web the customer comes back as a real page load, and only a
-  /// URL this app serves can pick the order back up and finish it. Android and
-  /// iOS match the same three paths inside the in-app WebView and pop before
-  /// they load, so one setting covers every platform.
-  ///
-  /// MUST match the callback URLs configured on the payment function
-  /// ([stripePaymentFunctionId]) — the function builds the gateway session
-  /// with its own copies, and a mismatch strands the customer mid-payment.
-  static const String paymentCallbackBaseUrl = webBaseUrl;
+  // ── LocationIQ ── (https://my.locationiq.com › Access Tokens)
+  /// Compile-time LocationIQ token. A non-empty `location_iq_key` in the
+  /// `business_setup` row overrides it at runtime (rotate without a release).
+  /// Empty in both places → free OpenStreetMap tiles + Nominatim geocoding.
+  static const String locationIqKey = '';
 
   /// ── Maps ──────────────────────────────────────────────────────────────
   /// Every map in the app is configured here (see "Map setup" in the docs).
@@ -80,8 +69,7 @@ class Constants {
   static const String mapAttribution = '© OpenStreetMap contributors';
   static const String mapAttributionUrl = 'https://www.openstreetmap.org/copyright';
 
-  /// Fallback map centre, used only when business setup has no store
-  /// location — maps normally open on the store's own location.
+  /// Fallback map centre, used only when business setup has no location.
   static const double mapDefaultLatitude = 23.8103;
   static const double mapDefaultLongitude = 90.4125;
 
@@ -95,8 +83,7 @@ class Constants {
   static const String nominatimEmail = '';
 
   /// LocationIQ replaces the free OpenStreetMap servers above (tiles and
-  /// reverse geocoding) once the store owner saves a LocationIQ key in
-  /// Business setup. The key itself lives in the database, never here.
+  /// reverse geocoding) whenever a key is configured — see [locationIqKey].
   static const String locationIqBaseUrl = 'https://us1.locationiq.com/v1';
   static const String locationIqTileUrl =
       'https://{s}-tiles.locationiq.com/v3/streets/r/{z}/{x}/{y}.png';
@@ -128,7 +115,7 @@ class Constants {
   static const double radiusCard = radiusLarge + 4;
 
   /// Minimum comfortable tap target for controls embedded in dense layouts
-  /// (product cards, list tiles). Keeps hit areas within accessibility limits.
+  /// (cards, list tiles). Keeps hit areas within accessibility limits.
   static const double minTapTarget = 40.0;
 
   /// Diameter of the tinted circle behind a status/result icon (empty states,
@@ -158,7 +145,6 @@ class Constants {
   static const String countryCode = 'country_code';
   static const String languageCode = 'language_code';
   static const String theme = 'theme';
-  static const String activeModule = 'active_module';
 
   /// "Remember me" on the sign-in form. These deliberately survive a logout —
   /// clearing them is only triggered by the user unticking the box.

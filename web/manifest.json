@@ -1,11 +1,11 @@
 {
-    "name": "Kiko Mart",
-    "short_name": "Kiko Mart",
+    "name": "Appwrite Boilerplate",
+    "short_name": "Appwrite Boilerplate",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#F5F7FA",
     "theme_color": "#C92A2A",
-    "description": "Kiko Mart — browse, order and get it delivered.",
+    "description": "Appwrite Boilerplate app",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

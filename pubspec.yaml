@@ -1,5 +1,5 @@
-name: kikomart_user_app
-description: "A new Flutter project."
+name: appwrite_boilerplate
+description: "Production-ready Flutter boilerplate: GetX + go_router + Appwrite + translations + LocationIQ maps + FCM."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -36,7 +36,7 @@ dependencies:
   # Clean web URLs: usePathUrlStrategy() in main.dart drops the /#/ prefix.
   flutter_web_plugins:
     sdk: flutter
-  # Opens banner 'url' actions in the external browser / a new tab.
+  # Opens external links (notification 'url' actions, store links).
   url_launcher: ^6.3.1
 
   # The following adds the Cupertino Icons font to your application.
@@ -57,11 +57,6 @@ dependencies:
   firebase_core: ^4.4.0
   firebase_messaging: ^16.1.1
 
-  carousel_slider: ^5.1.2
-  # Content-sized product grids: SliverAlignedGrid gives every tile in a row
-  # the height of the tallest one, so cards size to their own text instead of
-  # being forced into a guessed childAspectRatio.
-  flutter_staggered_grid_view: ^0.7.0
   http: ^1.6.0
   flutter_html: ^3.0.0-beta.2
   flutter_map: ^8.3.1
@@ -69,9 +64,8 @@ dependencies:
   geocoding: ^4.0.0
   location: ^8.0.1
   connectivity_plus: ^7.1.1
-  flutter_inappwebview: ^6.1.5
   # Native share sheet on mobile, the Web Share API (with a clipboard fallback)
-  # in the browser — used by the product share action.
+  # in the browser — see helper/share_helper.dart.
   share_plus: ^12.0.0
 
 dev_dependencies:

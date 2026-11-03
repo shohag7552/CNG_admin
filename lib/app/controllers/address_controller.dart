@@ -1,10 +1,10 @@
 import 'dart:developer';
-import 'package:kikomart_user_app/app/common/widgets/custom_toster.dart';
-import 'package:kikomart_user_app/app/controllers/settings_controller.dart';
-import 'package:kikomart_user_app/app/helper/session_manager.dart';
-import 'package:kikomart_user_app/app/models/address_model.dart';
-import 'package:kikomart_user_app/app/models/geocoded_address_model.dart';
-import 'package:kikomart_user_app/app/modules/address/domain/repository/address_repo_interface.dart';
+import 'package:appwrite_boilerplate/app/common/widgets/custom_toster.dart';
+import 'package:appwrite_boilerplate/app/controllers/settings_controller.dart';
+import 'package:appwrite_boilerplate/app/helper/session_manager.dart';
+import 'package:appwrite_boilerplate/app/models/address_model.dart';
+import 'package:appwrite_boilerplate/app/models/geocoded_address_model.dart';
+import 'package:appwrite_boilerplate/app/modules/address/domain/repository/address_repo_interface.dart';
 import 'package:get/get.dart';
 
 class AddressController extends GetxController implements GetxService {
@@ -102,8 +102,8 @@ class AddressController extends GetxController implements GetxService {
   }
 
   /// Update an address and refresh the list WITHOUT navigating back.
-  /// Use this when saving from a screen that should stay on top (e.g. the
-  /// checkout map flow). Returns true on success.
+  /// Use this when saving from a screen that should stay on top (e.g. a
+  /// map flow). Returns true on success.
   Future<bool> saveAddressChanges(String id, AddressModel address) async {
     try {
       await addressRepoInterface.updateAddress(id, address);
@@ -139,7 +139,7 @@ class AddressController extends GetxController implements GetxService {
     }
   }
 
-  /// Select address (for checkout)
+  /// Select an address (e.g. for a booking or delivery flow)
   void selectAddress(AddressModel address) {
     _selectedAddress = address;
     update();

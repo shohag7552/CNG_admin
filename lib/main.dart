@@ -1,12 +1,12 @@
 import 'dart:async';
 
-import 'package:kikomart_user_app/app/common/widgets/cookie_consent_banner.dart';
-import 'package:kikomart_user_app/app/common/widgets/no_internet_screen.dart';
-import 'package:kikomart_user_app/app/controllers/localization_controller.dart';
-import 'package:kikomart_user_app/app/helper/routes/app_router.dart';
-import 'package:kikomart_user_app/app/resources/constants.dart';
-import 'package:kikomart_user_app/app/resources/messages.dart';
-import 'package:kikomart_user_app/global.dart';
+import 'package:appwrite_boilerplate/app/common/widgets/cookie_consent_banner.dart';
+import 'package:appwrite_boilerplate/app/common/widgets/no_internet_screen.dart';
+import 'package:appwrite_boilerplate/app/controllers/localization_controller.dart';
+import 'package:appwrite_boilerplate/app/helper/routes/app_router.dart';
+import 'package:appwrite_boilerplate/app/resources/constants.dart';
+import 'package:appwrite_boilerplate/app/resources/messages.dart';
+import 'package:appwrite_boilerplate/global.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -23,7 +23,7 @@ Future<void> main() async {
   // Clean web URLs (/category/... instead of /#/category/...); no-op off web.
   usePathUrlStrategy();
 
-  // Web: make pushNamed()-opened pages (product/order/category details, …)
+  // Web: make pushNamed()-opened pages (detail pages, …)
   // update the browser URL. go_router stopped reflecting imperative pushes in
   // the URL by default (v8+); it warns the top route may not be deep-linkable,
   // but every pushed route here hydrates itself from its URL, so it is safe.

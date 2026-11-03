@@ -1,4 +1,4 @@
-import 'package:kikomart_user_app/app/resources/constants.dart';
+import 'package:appwrite_boilerplate/app/resources/constants.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -150,7 +150,7 @@ class ColorResource {
     ],
   );
 
-  static const List<BoxShadow>? customShadow = [
+  static const List<BoxShadow> customShadow = [
     BoxShadow(
       color: Colors.black12,
       blurRadius: 10,

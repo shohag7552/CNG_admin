@@ -1,8 +1,8 @@
 import 'dart:developer';
-import 'package:kikomart_user_app/app/common/widgets/custom_toster.dart';
-import 'package:kikomart_user_app/app/helper/session_manager.dart';
-import 'package:kikomart_user_app/app/models/user_model.dart';
-import 'package:kikomart_user_app/app/modules/profile/domain/repository/profile_repo_interface.dart';
+import 'package:appwrite_boilerplate/app/common/widgets/custom_toster.dart';
+import 'package:appwrite_boilerplate/app/helper/session_manager.dart';
+import 'package:appwrite_boilerplate/app/models/user_model.dart';
+import 'package:appwrite_boilerplate/app/modules/profile/domain/repository/profile_repo_interface.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
@@ -241,21 +241,4 @@ class ProfileController extends GetxController implements GetxService {
     }
     return null;
   }
-
-  /// Deduct amount from wallet balance
-  /// Returns true if successful, false otherwise
-  Future<bool> deductWalletBalance(double amount) async {
-    try {
-      final updatedUser = await profileRepoInterface.deductWalletBalance(amount);
-      _userProfile = updatedUser;
-      update();
-      return true;
-    } catch (e) {
-      log('Error deducting wallet balance: $e');
-      return false;
-    }
-  }
-
-  /// Get current wallet balance
-  double get walletBalance => _userProfile?.walletBalance ?? 0.0;
 }

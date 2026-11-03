@@ -1,9 +1,9 @@
 import 'dart:developer';
 import 'package:appwrite/models.dart';
-import 'package:kikomart_user_app/app/appwrite/appwrite_config.dart';
-import 'package:kikomart_user_app/app/appwrite/appwrite_service.dart';
-import 'package:kikomart_user_app/app/models/user_model.dart';
-import 'package:kikomart_user_app/app/modules/profile/domain/repository/profile_repo_interface.dart';
+import 'package:appwrite_boilerplate/app/appwrite/appwrite_config.dart';
+import 'package:appwrite_boilerplate/app/appwrite/appwrite_service.dart';
+import 'package:appwrite_boilerplate/app/models/user_model.dart';
+import 'package:appwrite_boilerplate/app/modules/profile/domain/repository/profile_repo_interface.dart';
 import 'package:image_picker/image_picker.dart';
 
 class ProfileRepository implements ProfileRepoInterface {
@@ -65,44 +65,6 @@ class ProfileRepository implements ProfileRepoInterface {
       return imageUrl;
     } catch (e) {
       log('Error uploading profile image: $e');
-      rethrow;
-    }
-  }
-
-  @override
-  Future<UserModel> deductWalletBalance(double amount) async {
-    try {
-      // Get current user
-      User? user = await appwriteService.getCurrentUser();
-      if (user == null) {
-        throw Exception('User not logged in');
-      }
-
-      // Fetch current wallet balance from database
-      final response = await appwriteService.getDocument(
-        tableId: AppwriteConfig.usersCollection,
-        rowId: user.$id,
-      );
-
-      final currentUser = UserModel.fromJson(response.data);
-      final currentBalance = currentUser.walletBalance;
-
-      if (currentBalance < amount) {
-        throw Exception('Insufficient wallet balance');
-      }
-
-      final newBalance = currentBalance - amount;
-
-      // Update only the wallet_balance field in Appwrite
-      final updatedResponse = await appwriteService.updateTable(
-        tableId: AppwriteConfig.usersCollection,
-        rowId: user.$id,
-        data: {'wallet_balance': newBalance},
-      );
-
-      return UserModel.fromJson(updatedResponse.data);
-    } catch (e) {
-      log('Error deducting wallet balance: $e');
       rethrow;
     }
   }

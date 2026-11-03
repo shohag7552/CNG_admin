@@ -1,139 +1,59 @@
 import 'dart:convert';
 
-import 'package:kikomart_user_app/app/appwrite/appwrite_service.dart';
-import 'package:kikomart_user_app/app/controllers/auth_controller.dart';
-import 'package:kikomart_user_app/app/controllers/category_controller.dart';
-import 'package:kikomart_user_app/app/controllers/coupon_controller.dart';
-import 'package:kikomart_user_app/app/controllers/product_controller.dart';
-import 'package:kikomart_user_app/app/controllers/banner_controller.dart';
-import 'package:kikomart_user_app/app/controllers/brand_controller.dart';
-import 'package:kikomart_user_app/app/controllers/flash_sale_controller.dart';
-import 'package:kikomart_user_app/app/controllers/shipping_controller.dart';
-import 'package:kikomart_user_app/app/modules/flash_sale/domain/repository/flash_sale_repo_interface.dart';
-import 'package:kikomart_user_app/app/modules/flash_sale/domain/repository/flash_sale_repository.dart';
-import 'package:kikomart_user_app/app/modules/brands/domain/repository/brand_repo_interface.dart';
-import 'package:kikomart_user_app/app/modules/brands/domain/repository/brand_repository.dart';
-import 'package:kikomart_user_app/app/modules/shipping/domain/repository/shipping_repo_interface.dart';
-import 'package:kikomart_user_app/app/modules/shipping/domain/repository/shipping_repository.dart';
-import 'package:kikomart_user_app/app/controllers/localization_controller.dart';
-import 'package:kikomart_user_app/app/controllers/module_controller.dart';
-import 'package:kikomart_user_app/app/controllers/cart_controller.dart';
-import 'package:kikomart_user_app/app/controllers/cart_animation_controller.dart';
-import 'package:kikomart_user_app/app/controllers/address_controller.dart';
-import 'package:kikomart_user_app/app/controllers/order_controller.dart';
-import 'package:kikomart_user_app/app/controllers/settings_controller.dart';
-import 'package:kikomart_user_app/app/controllers/profile_controller.dart';
-import 'package:kikomart_user_app/app/controllers/favorites_controller.dart';
-import 'package:kikomart_user_app/app/controllers/review_controller.dart';
-import 'package:kikomart_user_app/app/controllers/deliveryman_review_controller.dart';
-import 'package:kikomart_user_app/app/controllers/notification_controller.dart';
-import 'package:kikomart_user_app/app/controllers/loyalty_controller.dart';
-import 'package:kikomart_user_app/app/modules/auth/domain/repository/auth_repo_interface.dart';
-import 'package:kikomart_user_app/app/modules/auth/domain/repository/auth_repository.dart';
-import 'package:kikomart_user_app/app/modules/categories/domain/repository/category_repo_interface.dart';
-import 'package:kikomart_user_app/app/modules/categories/domain/repository/category_repository.dart';
-import 'package:kikomart_user_app/app/modules/coupons/domain/repository/coupon_repo_interface.dart';
-import 'package:kikomart_user_app/app/modules/coupons/domain/repository/coupon_repository.dart';
-import 'package:kikomart_user_app/app/modules/products/domain/repository/product_repo_interface.dart';
-import 'package:kikomart_user_app/app/modules/products/domain/repository/product_repository.dart';
-import 'package:kikomart_user_app/app/modules/banners/domain/repository/banner_repo_interface.dart';
-import 'package:kikomart_user_app/app/modules/banners/domain/repository/banner_repository.dart';
-import 'package:kikomart_user_app/app/modules/cart/domain/repository/cart_repo_interface.dart';
-import 'package:kikomart_user_app/app/modules/cart/domain/repository/cart_repository.dart';
-import 'package:kikomart_user_app/app/modules/address/domain/repository/address_repo_interface.dart';
-import 'package:kikomart_user_app/app/modules/address/domain/repository/address_repository.dart';
-import 'package:kikomart_user_app/app/modules/checkout/domain/repository/order_repo_interface.dart';
-import 'package:kikomart_user_app/app/modules/checkout/domain/repository/order_repository.dart';
-import 'package:kikomart_user_app/app/modules/settings/domain/repository/settings_repo_interface.dart';
-import 'package:kikomart_user_app/app/modules/settings/domain/repository/settings_repository.dart';
-import 'package:kikomart_user_app/app/modules/profile/domain/repository/profile_repo_interface.dart';
-import 'package:kikomart_user_app/app/modules/profile/domain/repository/profile_repository.dart';
-import 'package:kikomart_user_app/app/modules/favorites/domain/repository/favorites_repo_interface.dart';
-import 'package:kikomart_user_app/app/modules/favorites/domain/repository/favorites_repository.dart';
-import 'package:kikomart_user_app/app/modules/reviews/domain/repository/review_repo_interface.dart';
-import 'package:kikomart_user_app/app/modules/reviews/domain/repository/review_repository.dart';
-import 'package:kikomart_user_app/app/modules/reviews/domain/repository/deliveryman_review_repo_interface.dart';
-import 'package:kikomart_user_app/app/modules/reviews/domain/repository/deliveryman_review_repository.dart';
-import 'package:kikomart_user_app/app/modules/notification/domain/repository/notification_repo_interface.dart';
-import 'package:kikomart_user_app/app/modules/notification/domain/repository/notification_repository.dart';
-import 'package:kikomart_user_app/app/modules/loyalty_point/domain/repository/loyalty_repo_interface.dart';
-import 'package:kikomart_user_app/app/modules/loyalty_point/domain/repository/loyalty_repository.dart';
-import 'package:kikomart_user_app/app/modules/splash/domain/repository/splash_repo_interface.dart';
-import 'package:kikomart_user_app/app/modules/splash/domain/repository/splash_repository.dart';
-import 'package:kikomart_user_app/app/modules/policies/domain/repository/policy_repo_interface.dart';
-import 'package:kikomart_user_app/app/modules/policies/domain/repository/policy_repository.dart';
-import 'package:kikomart_user_app/app/controllers/policy_controller.dart';
-import 'package:kikomart_user_app/app/controllers/splash_controller.dart';
-import 'package:kikomart_user_app/app/controllers/update_controller.dart';
-import 'package:kikomart_user_app/app/resources/constants.dart';
+import 'package:appwrite_boilerplate/app/appwrite/appwrite_service.dart';
+import 'package:appwrite_boilerplate/app/controllers/address_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/auth_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/item_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/localization_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/notification_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/policy_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/profile_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/settings_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/splash_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/update_controller.dart';
+import 'package:appwrite_boilerplate/app/modules/address/domain/repository/address_repo_interface.dart';
+import 'package:appwrite_boilerplate/app/modules/address/domain/repository/address_repository.dart';
+import 'package:appwrite_boilerplate/app/modules/auth/domain/repository/auth_repo_interface.dart';
+import 'package:appwrite_boilerplate/app/modules/auth/domain/repository/auth_repository.dart';
+import 'package:appwrite_boilerplate/app/modules/example/domain/repository/item_repo_interface.dart';
+import 'package:appwrite_boilerplate/app/modules/example/domain/repository/item_repository.dart';
+import 'package:appwrite_boilerplate/app/modules/notification/domain/repository/notification_repo_interface.dart';
+import 'package:appwrite_boilerplate/app/modules/notification/domain/repository/notification_repository.dart';
+import 'package:appwrite_boilerplate/app/modules/policies/domain/repository/policy_repo_interface.dart';
+import 'package:appwrite_boilerplate/app/modules/policies/domain/repository/policy_repository.dart';
+import 'package:appwrite_boilerplate/app/modules/profile/domain/repository/profile_repo_interface.dart';
+import 'package:appwrite_boilerplate/app/modules/profile/domain/repository/profile_repository.dart';
+import 'package:appwrite_boilerplate/app/modules/settings/domain/repository/settings_repo_interface.dart';
+import 'package:appwrite_boilerplate/app/modules/settings/domain/repository/settings_repository.dart';
+import 'package:appwrite_boilerplate/app/modules/splash/domain/repository/splash_repo_interface.dart';
+import 'package:appwrite_boilerplate/app/modules/splash/domain/repository/splash_repository.dart';
+import 'package:appwrite_boilerplate/app/resources/constants.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Wires every repository + controller, then loads the translation maps.
+///
+/// New feature: build `XRepoInterface x = XRepository(...)`,
+/// `Get.lazyPut(() => x)`, then `Get.lazyPut(() => XController(xRepoInterface: Get.find()))`.
 Future<Map<String, Map<String, String>>> initializeDependencies() async {
   final sharedPreferences = await SharedPreferences.getInstance();
   Get.lazyPut(() => sharedPreferences, fenix: true);
 
   Get.lazyPut(() => LocalizationController(sharedPreferences: Get.find()));
   Get.lazyPut(() => AppwriteService());
-  // Get.lazyPut(() => ApiService(appBaseUrl: AppUrls.baseUrl, sharedPreferences: sharedPreferences));
 
-  /// Repository Initialization
-  AuthRepoInterface loginRepoInterface = AuthRepository(
+  /// Repositories
+  AuthRepoInterface authRepoInterface = AuthRepository(
     sharedPreferences: sharedPreferences,
     appwriteService: Get.find(),
   );
-  Get.lazyPut(() => loginRepoInterface);
+  Get.lazyPut(() => authRepoInterface);
 
-  CategoryRepoInterface categoryRepoInterface = CategoryRepository(
-    appwriteService: Get.find(),
+  SplashRepoInterface splashRepoInterface = SplashRepository(
+    sharedPreferences: sharedPreferences,
   );
-  Get.lazyPut(() => categoryRepoInterface);
-
-  CouponRepoInterface couponRepoInterface = CouponRepository(
-    appwriteService: Get.find(),
-  );
-  Get.lazyPut(() => couponRepoInterface);
-
-  ProductRepoInterface productRepoInterface = ProductRepository(
-    appwriteService: Get.find(),
-  );
-  Get.lazyPut(() => productRepoInterface);
-
-  BannerRepoInterface bannerRepoInterface = BannerRepository(
-    appwriteService: Get.find(),
-  );
-  Get.lazyPut(() => bannerRepoInterface);
-
-  BrandRepoInterface brandRepoInterface = BrandRepository(
-    appwriteService: Get.find(),
-  );
-  Get.lazyPut(() => brandRepoInterface);
-
-  ShippingRepoInterface shippingRepoInterface = ShippingRepository(
-    appwriteService: Get.find(),
-  );
-  Get.lazyPut(() => shippingRepoInterface);
-
-  FlashSaleRepoInterface flashSaleRepoInterface = FlashSaleRepository(
-    appwriteService: Get.find(),
-  );
-  Get.lazyPut(() => flashSaleRepoInterface);
-
-  CartRepoInterface cartRepoInterface = CartRepository(
-    appwriteService: Get.find(),
-  );
-  Get.lazyPut(() => cartRepoInterface);
-
-  AddressRepoInterface addressRepoInterface = AddressRepository(
-    appwriteService: Get.find(),
-  );
-  Get.lazyPut(() => addressRepoInterface);
-
-  OrderRepoInterface orderRepoInterface = OrderRepository(
-    appwriteService: Get.find(),
-  );
-  Get.lazyPut(() => orderRepoInterface);
+  Get.lazyPut(() => splashRepoInterface);
 
   SettingsRepoInterface settingsRepoInterface = SettingsRepository(
     appwriteService: Get.find(),
@@ -145,24 +65,10 @@ Future<Map<String, Map<String, String>>> initializeDependencies() async {
   );
   Get.lazyPut(() => profileRepoInterface);
 
-  FavoritesRepoInterface favoritesRepoInterface = FavoritesRepository(
+  AddressRepoInterface addressRepoInterface = AddressRepository(
     appwriteService: Get.find(),
   );
-  Get.lazyPut(() => favoritesRepoInterface);
-
-  ReviewRepoInterface reviewRepoInterface = ReviewRepository(
-    appwriteService: Get.find(),
-  );
-  Get.lazyPut(() => reviewRepoInterface);
-
-  DeliverymanReviewRepoInterface deliverymanReviewRepoInterface =
-      DeliverymanReviewRepository(appwriteService: Get.find());
-  Get.lazyPut(() => deliverymanReviewRepoInterface);
-
-  SplashRepoInterface splashRepoInterface = SplashRepository(
-    sharedPreferences: sharedPreferences,
-  );
-  Get.lazyPut(() => splashRepoInterface);
+  Get.lazyPut(() => addressRepoInterface);
 
   NotificationRepoInterface notificationRepoInterface = NotificationRepository(
     appwriteService: Get.find(),
@@ -174,44 +80,23 @@ Future<Map<String, Map<String, String>>> initializeDependencies() async {
   );
   Get.lazyPut(() => policyRepoInterface);
 
-  LoyaltyRepoInterface loyaltyRepoInterface = LoyaltyRepository(
+  ItemRepoInterface itemRepoInterface = ItemRepository(
     appwriteService: Get.find(),
   );
-  Get.lazyPut(() => loyaltyRepoInterface);
+  Get.lazyPut(() => itemRepoInterface);
 
-  /// Controller Initialization
-  // Fly-to-cart animation exists on Android/iOS only (never on web).
-  if (CartAnimationController.isSupported) {
-    Get.lazyPut(() => CartAnimationController());
-  }
+  /// Controllers
   Get.lazyPut(() => AuthController(authRepoInterface: Get.find()));
-  Get.lazyPut(() => CategoryController(categoryRepoInterface: Get.find()));
-  Get.lazyPut(() => CouponController(couponRepoInterface: Get.find()));
-  Get.lazyPut(() => ProductController(productRepoInterface: Get.find()));
-  Get.lazyPut(() => BannerController(bannerRepoInterface: Get.find()));
-  Get.lazyPut(() => BrandController(brandRepoInterface: Get.find()));
-  Get.lazyPut(() => ShippingController(shippingRepoInterface: Get.find()));
-  Get.lazyPut(() => FlashSaleController(flashSaleRepoInterface: Get.find()));
-  Get.lazyPut(() => CartController(cartRepoInterface: Get.find()));
-  Get.lazyPut(() => AddressController(addressRepoInterface: Get.find()));
-  Get.lazyPut(() => OrderController(orderRepoInterface: Get.find()));
+  Get.lazyPut(() => SplashController(splashRepositoryInterface: Get.find()));
   Get.lazyPut(() => SettingsController(settingsRepoInterface: Get.find()));
-  Get.lazyPut(() => ModuleController(sharedPreferences: Get.find()));
+  Get.lazyPut(() => UpdateController());
   Get.lazyPut(() => ProfileController(profileRepoInterface: Get.find()));
-  Get.lazyPut(() => FavoritesController(favoritesRepoInterface: Get.find()));
-  Get.lazyPut(() => ReviewController(reviewRepoInterface: Get.find()));
-  Get.lazyPut(
-    () => DeliverymanReviewController(
-      deliverymanReviewRepoInterface: Get.find(),
-    ),
-  );
+  Get.lazyPut(() => AddressController(addressRepoInterface: Get.find()));
   Get.lazyPut(
     () => NotificationController(notificationRepoInterface: Get.find()),
   );
-  Get.lazyPut(() => LoyaltyController(loyaltyRepoInterface: Get.find()));
-  Get.lazyPut(() => SplashController(splashRepositoryInterface: Get.find()));
   Get.lazyPut(() => PolicyController(policyRepoInterface: Get.find()));
-  Get.lazyPut(() => UpdateController());
+  Get.lazyPut(() => ItemController(itemRepoInterface: Get.find()));
 
   /// Retrieving localized data
   Map<String, Map<String, String>> languages = {};

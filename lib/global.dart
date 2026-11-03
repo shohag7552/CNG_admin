@@ -1,10 +1,10 @@
-import 'package:kikomart_user_app/app/controllers/auth_controller.dart';
-import 'package:kikomart_user_app/app/controllers/settings_controller.dart';
-import 'package:kikomart_user_app/app/controllers/splash_controller.dart';
-import 'package:kikomart_user_app/app/controllers/update_controller.dart';
-import 'package:kikomart_user_app/app/helper/dependencies.dart';
-import 'package:kikomart_user_app/app/helper/notification_helper.dart';
-import 'package:kikomart_user_app/app/helper/routes/app_router.dart';
+import 'package:appwrite_boilerplate/app/controllers/auth_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/settings_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/splash_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/update_controller.dart';
+import 'package:appwrite_boilerplate/app/helper/dependencies.dart';
+import 'package:appwrite_boilerplate/app/helper/notification_helper.dart';
+import 'package:appwrite_boilerplate/app/helper/routes/app_router.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -25,18 +25,10 @@ class Global {
     // of the app still boots in the browser.
     if (!kIsWeb) {
       try {
-        if (GetPlatform.isAndroid) {
-          await Firebase.initializeApp(
-            options: const FirebaseOptions(
-              apiKey: 'AIzaSyBWr0YygfC2jQtT4fS7FIIBfU3Q0T0tVJ0',
-              appId: '1:232005235395:android:ff2d6172777e510c802876',
-              messagingSenderId: '232005235395',
-              projectId: 'kiko-mart',
-            ),
-          );
-        } else {
-          await Firebase.initializeApp();
-        }
+        // Push stays off (caught below) until Firebase is configured: run
+        // `flutterfire configure`, then pass
+        // `options: DefaultFirebaseOptions.currentPlatform` here.
+        await Firebase.initializeApp();
 
         final RemoteMessage? remoteMessage =
             await FirebaseMessaging.instance.getInitialMessage();
@@ -45,7 +37,9 @@ class Global {
         }
         await NotificationHelper.initialize(flutterLocalNotificationsPlugin);
         FirebaseMessaging.onBackgroundMessage(myBackgroundMessageHandler);
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('Firebase not configured, push disabled: $e');
+      }
     }
 
     if (!kIsWeb) {
@@ -77,10 +71,8 @@ class Global {
       await Get.find<AuthController>().isAlreadyLoggedIn();
       final settingsOk = await Get.find<SplashController>().fetchSettings();
       if (settingsOk) {
-        // Block behind the startup gate when the store is down for maintenance
-        // (takes precedence) or requires a newer version; otherwise open on the
-        // dashboard — guests browse products and are asked to sign in only when
-        // an action requires it.
+        // Maintenance takes precedence over force update; otherwise open on
+        // the dashboard (guests browse; sign-in is asked for when needed).
         final updateController = Get.find<UpdateController>();
         updateController.checkForForceUpdate(
           Get.find<SettingsController>().businessSetup,

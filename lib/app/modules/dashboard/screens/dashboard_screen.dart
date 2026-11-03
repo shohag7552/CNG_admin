@@ -1,25 +1,19 @@
 import 'dart:async';
 import 'dart:ui' show ImageFilter, MaskFilter, BlurStyle;
 
-import 'package:kikomart_user_app/app/helper/platform/app_exit.dart';
+import 'package:appwrite_boilerplate/app/helper/platform/app_exit.dart';
 
-import 'package:kikomart_user_app/app/common/widgets/custom_toster.dart';
-import 'package:kikomart_user_app/app/common/widgets/web_top_nav.dart';
-import 'package:kikomart_user_app/app/controllers/cart_animation_controller.dart';
-import 'package:kikomart_user_app/app/controllers/cart_controller.dart';
-import 'package:kikomart_user_app/app/controllers/favorites_controller.dart';
-import 'package:kikomart_user_app/app/helper/dashboard_tab_bus.dart';
-import 'package:kikomart_user_app/app/helper/nav_bar_visibility.dart';
-import 'package:kikomart_user_app/app/modules/dashboard/screens/home_module_view.dart';
-import 'package:kikomart_user_app/app/modules/dashboard/widgets/web_profile_drawer.dart';
-import 'package:kikomart_user_app/app/modules/cart/screens/cart_page.dart';
-import 'package:kikomart_user_app/app/modules/favorites/screens/favorites_screen.dart';
-import 'package:kikomart_user_app/app/modules/orders/screens/orders_page.dart';
-import 'package:kikomart_user_app/app/modules/profile/screens/profile_page.dart';
-import 'package:kikomart_user_app/app/resources/colors.dart';
-import 'package:kikomart_user_app/app/resources/constants.dart';
-import 'package:kikomart_user_app/app/resources/text_style.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:appwrite_boilerplate/app/common/widgets/custom_toster.dart';
+import 'package:appwrite_boilerplate/app/common/widgets/web_top_nav.dart';
+import 'package:appwrite_boilerplate/app/helper/dashboard_tab_bus.dart';
+import 'package:appwrite_boilerplate/app/helper/nav_bar_visibility.dart';
+import 'package:appwrite_boilerplate/app/modules/dashboard/widgets/web_profile_drawer.dart';
+import 'package:appwrite_boilerplate/app/modules/example/screens/item_list_screen.dart';
+import 'package:appwrite_boilerplate/app/modules/notification/screens/notification_screen.dart';
+import 'package:appwrite_boilerplate/app/modules/profile/screens/profile_page.dart';
+import 'package:appwrite_boilerplate/app/resources/colors.dart';
+import 'package:appwrite_boilerplate/app/resources/constants.dart';
+import 'package:appwrite_boilerplate/app/resources/text_style.dart';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
@@ -41,24 +35,20 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen>
     with SingleTickerProviderStateMixin {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  final Connectivity _connectivity = Connectivity();
   late PageController _pageController;
 
   /// One-shot bloom for the tapped tab's glow: it flares in then fades out.
   late final AnimationController _glowController;
 
-  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   int _selectedIndex = 0;
   bool _canExit = false;
-  bool _hadConnection = true;
 
-  // Pages
-  final List<Widget> _pages = [
-    const HomeModuleView(),
-    const FavoritesScreen(),
-    const CartPage(),
-    const OrdersPage(),
-    const ProfilePage(),
+  /// Tab pages, in [DashboardTabs.names] order. Add a tab = add a page here,
+  /// a slug there, and a `_buildNavItem` (+ a `_navItem` in WebTopNav).
+  final List<Widget> _pages = const [
+    ItemListScreen(),
+    NotificationScreen(isStandalone: false),
+    ProfilePage(),
   ];
 
   @override
@@ -75,42 +65,6 @@ class _DashboardScreenState extends State<DashboardScreen>
       duration: const Duration(milliseconds: 650),
       value: 1.0,
     );
-    _listenToConnectivity();
-
-    // Load favorites
-    Get.find<FavoritesController>().fetchFavorites(canUpdate: false);
-
-    // Load cart items (using hardcoded user_id for now)
-    Get.find<CartController>().getCartItems();
-  }
-
-  Future<void> _reloadDashboardData() async {
-    await Future.wait([
-      Get.find<FavoritesController>().fetchFavorites(canUpdate: false),
-      Get.find<CartController>().getCartItems(),
-    ]);
-  }
-
-  Future<void> _listenToConnectivity() async {
-    _hadConnection = await _checkConnection();
-    _connectivitySubscription = _connectivity.onConnectivityChanged.listen((
-      results,
-    ) async {
-      final hasConnection = _hasUsableConnection(results);
-      if (hasConnection && !_hadConnection) {
-        await _reloadDashboardData();
-      }
-      _hadConnection = hasConnection;
-    });
-  }
-
-  Future<bool> _checkConnection() async {
-    final results = await _connectivity.checkConnectivity();
-    return _hasUsableConnection(results);
-  }
-
-  bool _hasUsableConnection(List<ConnectivityResult> results) {
-    return results.any((result) => result != ConnectivityResult.none);
   }
 
   @override
@@ -126,7 +80,6 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   @override
   void dispose() {
-    _connectivitySubscription?.cancel();
     _pageController.dispose();
     _glowController.dispose();
     super.dispose();
@@ -174,7 +127,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     _syncTabToUrl(index);
   }
 
-  /// Web only: reflect the active tab in the browser URL (`/?tab=cart`) so
+  /// Web only: reflect the active tab in the browser URL (`/?tab=profile`) so
   /// the address bar names the visible screen and the link is shareable.
   /// No-op on mobile — tab switching stays purely local there.
   void _syncTabToUrl(int index) {
@@ -320,23 +273,16 @@ class _DashboardScreenState extends State<DashboardScreen>
                         0,
                       ),
                       _buildNavItem(
-                        CupertinoIcons.heart,
-                        CupertinoIcons.heart_fill,
-                        'favorites'.tr,
+                        CupertinoIcons.bell,
+                        CupertinoIcons.bell_fill,
+                        'notifications'.tr,
                         1,
-                      ),
-                      _buildCartNavItem(),
-                      _buildNavItem(
-                        CupertinoIcons.doc_text,
-                        CupertinoIcons.doc_text_fill,
-                        'orders'.tr,
-                        3,
                       ),
                       _buildNavItem(
                         CupertinoIcons.person,
                         CupertinoIcons.person_fill,
                         'profile'.tr,
-                        4,
+                        2,
                       ),
                     ],
                   ),
@@ -454,104 +400,6 @@ class _DashboardScreenState extends State<DashboardScreen>
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildCartNavItem() {
-    final isSelected = _selectedIndex == 2;
-
-    return Expanded(
-      child: GetBuilder<CartController>(
-        builder: (cartController) {
-          final itemCount = cartController.itemCount;
-          final hasItems = itemCount > 0;
-          // Match the other tabs: brand red only when selected, muted otherwise
-          // (the item-count badge still signals a non-empty cart).
-          final Color color =
-              isSelected ? ColorResource.primaryDark : context.textSecondary;
-
-          return GestureDetector(
-            onTap: () => _onNavItemTapped(2),
-            behavior: HitTestBehavior.opaque,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Stack(
-                    // Animation target — only exists on Android/iOS; on web the
-                    // controller isn't registered, so no key is attached.
-                    key: CartAnimationController.isSupported
-                        ? Get.find<CartAnimationController>().cartIconKey
-                        : null,
-                    alignment: Alignment.center,
-                    clipBehavior: Clip.none,
-                    children: [
-                      _navGlow(isSelected),
-                      _navIcon(
-                        CupertinoIcons.cart,
-                        CupertinoIcons.cart_fill,
-                        isSelected,
-                        color,
-                      ),
-                      if (hasItems)
-                        Positioned(
-                          right: -8,
-                          top: -8,
-                          child: TweenAnimationBuilder<double>(
-                            duration: const Duration(milliseconds: 500),
-                            tween: Tween(begin: 0.0, end: 1.0),
-                            builder: (context, value, child) {
-                              return Transform.scale(
-                                scale: 0.8 + (0.2 * value),
-                                child: Container(
-                                  padding: const EdgeInsets.all(2),
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [
-                                        ColorResource.error,
-                                        ColorResource.error
-                                            .withValues(alpha: 0.8),
-                                      ],
-                                    ),
-                                    shape: BoxShape.circle,
-                                    // boxShadow: [
-                                    //   BoxShadow(
-                                    //     color: ColorResource.error
-                                    //         .withValues(alpha: 0.5),
-                                    //     blurRadius: 6,
-                                    //     spreadRadius: 1,
-                                    //   ),
-                                    // ],
-                                  ),
-                                  constraints: const BoxConstraints(
-                                    minWidth: 18,
-                                    minHeight: 18,
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      itemCount > 99 ? '99+' : '$itemCount',
-                                      style: poppinsBold.copyWith(
-                                        fontSize: 10,
-                                        color: ColorResource.textWhite,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  _navLabel('cart'.tr, isSelected),
-                ],
-              ),
-            ),
-          );
-        },
       ),
     );
   }

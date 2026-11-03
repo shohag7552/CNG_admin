@@ -1,7 +1,7 @@
-import 'package:kikomart_user_app/app/models/business_setup_model.dart';
-import 'package:kikomart_user_app/app/models/store_setup_model.dart';
-import 'package:kikomart_user_app/app/modules/settings/domain/repository/settings_repo_interface.dart';
-import 'package:kikomart_user_app/app/resources/constants.dart';
+import 'package:appwrite_boilerplate/app/models/business_setup_model.dart';
+import 'package:appwrite_boilerplate/app/models/store_setup_model.dart';
+import 'package:appwrite_boilerplate/app/modules/settings/domain/repository/settings_repo_interface.dart';
+import 'package:appwrite_boilerplate/app/resources/constants.dart';
 import 'package:get/get.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter/foundation.dart';
@@ -21,8 +21,8 @@ class SettingsController extends GetxController implements GetxService {
   /// store's own location from business setup. Falls back to [Constants]
   /// only when the store hasn't set one (or setup failed to load).
   LatLng get defaultMapLocation {
-    final lat = _businessSetup?.storeLatitude;
-    final lng = _businessSetup?.storeLongitude;
+    final lat = _businessSetup?.latitude;
+    final lng = _businessSetup?.longitude;
     // 0,0 is the unset default of a numeric column, not a real store.
     if (lat != null && lng != null && !(lat == 0 && lng == 0)) {
       return LatLng(lat, lng);
@@ -33,9 +33,13 @@ class SettingsController extends GetxController implements GetxService {
     );
   }
 
-  /// LocationIQ key from business setup; empty means the free OpenStreetMap
-  /// servers are used for map tiles and address lookups.
-  String get locationIqKey => _businessSetup?.locationIqKey?.trim() ?? '';
+  /// LocationIQ key: the remote one from business setup wins, else the
+  /// compile-time [Constants.locationIqKey]. Empty means the free
+  /// OpenStreetMap servers are used for map tiles and address lookups.
+  String get locationIqKey {
+    final remote = _businessSetup?.locationIqKey?.trim() ?? '';
+    return remote.isNotEmpty ? remote : Constants.locationIqKey.trim();
+  }
   bool get usesLocationIq => locationIqKey.isNotEmpty;
 
   String get mapTileUrl => usesLocationIq

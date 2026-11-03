@@ -1,7 +1,7 @@
 import 'dart:developer';
-import 'package:kikomart_user_app/app/helper/session_manager.dart';
-import 'package:kikomart_user_app/app/models/notification_model.dart';
-import 'package:kikomart_user_app/app/modules/notification/domain/repository/notification_repo_interface.dart';
+import 'package:appwrite_boilerplate/app/helper/session_manager.dart';
+import 'package:appwrite_boilerplate/app/models/notification_model.dart';
+import 'package:appwrite_boilerplate/app/modules/notification/domain/repository/notification_repo_interface.dart';
 import 'package:get/get.dart';
 
 class NotificationController extends GetxController implements GetxService {

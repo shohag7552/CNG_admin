@@ -1,22 +1,26 @@
-import 'package:kikomart_user_app/app/common/widgets/auth_gate.dart';
-import 'package:kikomart_user_app/app/common/widgets/custom_appbar.dart';
-import 'package:kikomart_user_app/app/common/widgets/hover_lift.dart';
-import 'package:kikomart_user_app/app/common/widgets/web_footer.dart';
-import 'package:kikomart_user_app/app/common/widgets/web_top_nav.dart';
-import 'package:kikomart_user_app/app/controllers/notification_controller.dart';
-import 'package:kikomart_user_app/app/helper/dashboard_tab_bus.dart';
-import 'package:kikomart_user_app/app/models/notification_model.dart';
-import 'package:kikomart_user_app/app/modules/dashboard/widgets/web_profile_drawer.dart';
-import 'package:kikomart_user_app/app/modules/notification/widgets/notification_detail_bottom_sheet.dart';
-import 'package:kikomart_user_app/app/resources/colors.dart';
-import 'package:kikomart_user_app/app/resources/constants.dart';
-import 'package:kikomart_user_app/app/resources/text_style.dart';
+import 'package:appwrite_boilerplate/app/common/widgets/auth_gate.dart';
+import 'package:appwrite_boilerplate/app/common/widgets/custom_appbar.dart';
+import 'package:appwrite_boilerplate/app/common/widgets/hover_lift.dart';
+import 'package:appwrite_boilerplate/app/common/widgets/web_footer.dart';
+import 'package:appwrite_boilerplate/app/common/widgets/web_top_nav.dart';
+import 'package:appwrite_boilerplate/app/controllers/notification_controller.dart';
+import 'package:appwrite_boilerplate/app/helper/dashboard_tab_bus.dart';
+import 'package:appwrite_boilerplate/app/models/notification_model.dart';
+import 'package:appwrite_boilerplate/app/modules/dashboard/widgets/web_profile_drawer.dart';
+import 'package:appwrite_boilerplate/app/modules/notification/widgets/notification_detail_bottom_sheet.dart';
+import 'package:appwrite_boilerplate/app/resources/colors.dart';
+import 'package:appwrite_boilerplate/app/resources/constants.dart';
+import 'package:appwrite_boilerplate/app/resources/text_style.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 class NotificationScreen extends StatefulWidget {
-  const NotificationScreen({super.key});
+  /// False when embedded as a dashboard tab: the dashboard already owns the
+  /// web top-nav/drawer, and there is nothing to go back to.
+  final bool isStandalone;
+
+  const NotificationScreen({super.key, this.isStandalone = true});
 
   @override
   State<NotificationScreen> createState() => _NotificationScreenState();
@@ -47,7 +51,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
       backgroundColor: context.scaffoldBackground,
       // On web the shared top-nav has no custom actions, so "mark all read"
       // moves into the inline header below.
-      appBar: isWeb
+      appBar: isWeb && !widget.isStandalone
+          ? null
+          : isWeb
           ? WebTopNav(
               selectedIndex: null,
               onDestinationSelected: (index) =>
@@ -56,6 +62,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
             )
           : CustomAppbar(
               title: 'notifications_title'.tr,
+              showBackButton: widget.isStandalone,
               actions: [
                 GetBuilder<NotificationController>(
                   builder: (controller) {
@@ -77,7 +84,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                 ),
               ],
             ),
-      endDrawer: isWeb ? const WebProfileDrawer() : null,
+      endDrawer: isWeb && widget.isStandalone ? const WebProfileDrawer() : null,
       body: AuthGate(
         child: GetBuilder<NotificationController>(
         builder: (controller) {
@@ -313,10 +320,6 @@ class _NotificationScreenState extends State<NotificationScreen> {
     Color color;
 
     switch (type) {
-      case 'order':
-        icon = Icons.shopping_bag_outlined;
-        color = Colors.green;
-        break;
       case 'promo':
         icon = Icons.local_offer_outlined;
         color = Colors.orange;

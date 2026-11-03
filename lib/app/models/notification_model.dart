@@ -1,12 +1,12 @@
 class NotificationModel {
   final String id;
   final String userId;
-  final String type; // 'order', 'promo', 'system'
+  final String type; // e.g. 'promo', 'system', or your own
   final String title;
   final String message;
   final String? imageUrl;
-  final String? actionType; // 'order', 'product', 'url', 'none'
-  final String? actionValue; // Order ID, Product ID, or URL
+  final String? actionType; // 'route' (in-app path), 'url', 'none'
+  final String? actionValue; // the path for 'route', the link for 'url'
   final bool isRead;
   final DateTime createdAt;
 

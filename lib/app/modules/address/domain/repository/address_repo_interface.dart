@@ -1,5 +1,5 @@
-import 'package:kikomart_user_app/app/models/address_model.dart';
-import 'package:kikomart_user_app/app/models/geocoded_address_model.dart';
+import 'package:appwrite_boilerplate/app/models/address_model.dart';
+import 'package:appwrite_boilerplate/app/models/geocoded_address_model.dart';
 
 abstract class AddressRepoInterface {
   Future<List<AddressModel>> getAddresses();

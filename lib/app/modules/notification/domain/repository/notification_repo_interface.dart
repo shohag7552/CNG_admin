@@ -1,4 +1,4 @@
-import 'package:kikomart_user_app/app/models/notification_model.dart';
+import 'package:appwrite_boilerplate/app/models/notification_model.dart';
 
 abstract class NotificationRepoInterface {
   Future<List<NotificationModel>> getNotifications();
