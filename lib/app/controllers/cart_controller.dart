@@ -1,0 +1,384 @@
+import 'dart:developer';
+import 'package:kikomart_user_app/app/common/widgets/custom_toster.dart';
+import 'package:kikomart_user_app/app/controllers/product_controller.dart';
+import 'package:kikomart_user_app/app/controllers/settings_controller.dart';
+import 'package:kikomart_user_app/app/helper/session_manager.dart';
+import 'package:kikomart_user_app/app/models/cart_item_model.dart';
+import 'package:kikomart_user_app/app/models/coupon_model.dart';
+import 'package:kikomart_user_app/app/modules/cart/domain/repository/cart_repo_interface.dart';
+import 'package:get/get.dart';
+
+class CartController extends GetxController implements GetxService {
+  final CartRepoInterface cartRepoInterface;
+
+  CartController({required this.cartRepoInterface});
+
+  bool _isLoading = false;
+  bool get isLoading => _isLoading;
+
+  List<CartItemModel> _cartItems = [];
+  List<CartItemModel> get cartItems => _cartItems;
+
+  String? _errorMessage;
+  String? get errorMessage => _errorMessage;
+
+  // Cache for product stock levels
+  final Map<String, int> _productStocks = {};
+  int? getProductStock(String productId) => _productStocks[productId];
+
+  // Coupon management
+  CouponModel? _appliedCoupon;
+  CouponModel? get appliedCoupon => _appliedCoupon;
+
+  // Cart totals
+  int get itemCount => _cartItems.fold(0, (sum, item) => sum + item.quantity);
+
+  /// Original subtotal using base prices (before any product discounts)
+  double get originalSubtotal =>
+      _cartItems.fold(0.0, (sum, item) => sum + item.originalUnitPrice * item.quantity);
+
+  /// Subtotal using discounted final prices
+  double get subtotal =>
+      _cartItems.fold(0.0, (sum, item) => sum + item.itemTotal);
+
+  /// Total item-level discount (original - discounted)
+  double get itemDiscountTotal => originalSubtotal - subtotal;
+
+  /// Store-wide VAT rate in percent, read live from the business setup
+  /// (0 when settings aren't loaded yet or the store charges no tax).
+  double get vatPercentage {
+    if (!Get.isRegistered<SettingsController>()) return 0.0;
+    return Get.find<SettingsController>().businessSetup?.vatPercentage ?? 0.0;
+  }
+
+  /// VAT/tax on the discounted subtotal, driven by the business setup.
+  double get tax => subtotal * vatPercentage / 100;
+
+  /// Display form of [vatPercentage]: whole numbers without decimals
+  /// ("10"), fractional rates with one ("7.5").
+  String get vatPercentageLabel => vatPercentage % 1 == 0
+      ? vatPercentage.toInt().toString()
+      : vatPercentage.toStringAsFixed(1);
+
+  // Calculate discount from applied coupon
+  double get discountAmount {
+    if (_appliedCoupon == null) return 0.0;
+    return _appliedCoupon!.calculateDiscount(subtotal);
+  }
+
+  double get total => subtotal + tax - discountAmount;
+
+  /// Clears the in-memory cart (used on logout; leaves the server cart intact).
+  void clearLocal() {
+    _cartItems = [];
+    _productStocks.clear();
+    update();
+  }
+
+  /// Fetch cart items for user
+  Future<void> getCartItems() async {
+    // Auth-required: never hit Appwrite for a guest.
+    if (!isUserLoggedIn()) {
+      _cartItems = [];
+      update();
+      return;
+    }
+    try {
+      _isLoading = true;
+      _errorMessage = null;
+      update();
+
+      _cartItems = await cartRepoInterface.getCartItems();
+      
+      // Fetch and cache product stocks sequentially to avoid overwhelming the server
+      if (Get.isRegistered<ProductController>()) {
+        final productController = Get.find<ProductController>();
+        for (var item in _cartItems) {
+          if (!_productStocks.containsKey(item.productId)) {
+            final product = await productController.getProductById(item.productId);
+            if (product != null) {
+              _productStocks[item.productId] = product.stock;
+            }
+          }
+        }
+      }
+      
+      _isLoading = false;
+      update();
+    } catch (e) {
+      _isLoading = false;
+      _errorMessage = 'failed_to_load_cart'.tr;
+      log('Error loading cart: $e');
+      update();
+    }
+  }
+
+  /// Add item to cart
+  Future<void> addToCart(CartItemModel item) async {
+    // Auth-required write: never hit Appwrite for a guest.
+    if (!isUserLoggedIn()) return;
+    try {
+      // Check if an identical item already exists
+      final existingItemIndex = _cartItems.indexWhere((existing) => 
+        existing.productId == item.productId && 
+        areVariantsIdentical(existing.selectedVariants, item.selectedVariants)
+      );
+
+      if (existingItemIndex != -1) {
+        final existingItem = _cartItems[existingItemIndex];
+        final newTotalQuantity = existingItem.quantity + item.quantity;
+
+        // Ensure stock limit before updating
+        final stock = _productStocks[item.productId];
+        if (stock != null && newTotalQuantity > stock) {
+          customToster('cannot_add_more_stock_limit'.trParams({
+            'inCart': '${existingItem.quantity}',
+            'stock': '$stock',
+          }));
+          throw Exception('Stock limit exceeded');
+        }
+
+        customToster('updated_identical_item_quantity'.tr);
+        if (existingItem.finalPrice != item.finalPrice) {
+          // Same product but new pricing (e.g. a flash sale started or ended
+          // since the line was added) — merge quantities AND adopt the
+          // incoming pricing so the line charges the current price.
+          final unitTotal = item.quantity > 0
+              ? item.itemTotal / item.quantity
+              : item.finalPrice;
+          await updateCartItemDetails(
+            existingItem.copyWith(
+              quantity: newTotalQuantity,
+              basePrice: item.basePrice,
+              discountType: item.discountType,
+              discountValue: item.discountValue,
+              finalPrice: item.finalPrice,
+              itemTotal: unitTotal * newTotalQuantity,
+            ),
+          );
+        } else {
+          await updateQuantity(existingItem.id, newTotalQuantity);
+        }
+        return;
+      }
+
+      await cartRepoInterface.addCartItem(item);
+      
+      // Refresh cart
+      await getCartItems();
+      
+      log('Item added to cart successfully');
+    } catch (e) {
+      if (e.toString() != 'Exception: Stock limit exceeded') {
+        _errorMessage = 'failed_to_add_item'.tr;
+        log('Error adding to cart: $e');
+        update();
+      }
+      rethrow;
+    }
+  }
+
+  bool areVariantsIdentical(List<SelectedVariant> variants1, List<SelectedVariant> variants2) {
+    if (variants1.length != variants2.length) return false;
+    
+    for (var v1 in variants1) {
+      final v2 = variants2.firstWhereOrNull((v) => v.groupTitle == v1.groupTitle);
+      if (v2 == null) return false;
+      if (v1.selections.length != v2.selections.length) return false;
+      
+      for (var s1 in v1.selections) {
+        final hasMatch = v2.selections.any((s2) => s2.optionName == s1.optionName);
+        if (!hasMatch) return false;
+      }
+    }
+    return true;
+  }
+
+  /// Update item quantity
+  Future<void> updateQuantity(String itemId, int quantity) async {
+    try {
+      if (quantity < 1) return;
+
+      await cartRepoInterface.updateCartItem(itemId, quantity);
+      
+      // Update local state
+      final index = _cartItems.indexWhere((item) => item.id == itemId);
+      if (index != -1) {
+        final item = _cartItems[index];
+        final newItemTotal = item.unitPrice * quantity;
+        _cartItems[index] = item.copyWith(
+          quantity: quantity,
+          itemTotal: newItemTotal,
+        );
+        update();
+      }
+    } catch (e) {
+      _errorMessage = 'failed_to_update_quantity'.tr;
+      log('Error updating quantity: $e');
+      update();
+    }
+  }
+
+  /// Update cart item details (variants and quantity)
+  Future<void> updateCartItemDetails(CartItemModel updatedItem) async {
+    try {
+      await cartRepoInterface.updateCartItemDetails(updatedItem);
+      
+      // Update local state
+      final index = _cartItems.indexWhere((item) => item.id == updatedItem.id);
+      if (index != -1) {
+        _cartItems[index] = updatedItem;
+        update();
+      }
+      log('Item details updated successfully');
+    } catch (e) {
+      _errorMessage = 'failed_to_update_item_details'.tr;
+      log('Error updating item details: $e');
+      update();
+      rethrow;
+    }
+  }
+
+  /// Increment quantity
+  void incrementQuantity(String itemId) {
+    final item = _cartItems.firstWhere((item) => item.id == itemId);
+    
+    // Check stock if available
+    final stock = _productStocks[item.productId];
+    if (stock != null && item.quantity >= stock) {
+      customToster('maximum_stock_limit_reached'.tr);
+      return;
+    }
+    
+    updateQuantity(itemId, item.quantity + 1);
+  }
+
+  /// Decrement quantity
+  void decrementQuantity(String itemId) {
+    final item = _cartItems.firstWhere((item) => item.id == itemId);
+    if (item.quantity > 1) {
+      updateQuantity(itemId, item.quantity - 1);
+    }
+  }
+
+  /// Remove item from cart
+  Future<void> removeItem(String itemId) async {
+    try {
+      await cartRepoInterface.removeCartItem(itemId);
+      
+      // Update local state
+      _cartItems.removeWhere((item) => item.id == itemId);
+      update();
+      
+      log('Item removed from cart');
+    } catch (e) {
+      _errorMessage = 'failed_to_remove_item'.tr;
+      log('Error removing item: $e');
+      update();
+    }
+  }
+
+  /// Clear entire cart
+  Future<void> clearCart() async {
+    try {
+      await cartRepoInterface.clearCart();
+      _cartItems.clear();
+      update();
+      
+      log('Cart cleared successfully');
+    } catch (e) {
+      _errorMessage = 'failed_to_clear_cart'.tr;
+      log('Error clearing cart: $e');
+      update();
+    }
+  }
+
+  /// Apply coupon
+  void applyCoupon(CouponModel coupon) {
+    log('Attempting to apply coupon: ${coupon.code}');
+    log('Current subtotal: $subtotal');
+    log('Coupon min order: ${coupon.minOrderAmount}');
+    log('Coupon is active: ${coupon.isActive}');
+    log('Coupon valid from: ${coupon.validFrom}');
+    log('Coupon valid until: ${coupon.validUntil}');
+    
+    // Check if coupon is active
+    if (!coupon.isActive) {
+      customToster('coupon_not_currently_active'.tr);
+      return;
+    }
+
+    // Check validity period
+    final now = DateTime.now();
+    if (now.isBefore(coupon.validFrom)) {
+      customToster('coupon_valid_from_date'.trParams({'date': _formatDate(coupon.validFrom)}));
+      return;
+    }
+
+    if (now.isAfter(coupon.validUntil)) {
+      customToster('coupon_expired_on_date'.trParams({'date': _formatDate(coupon.validUntil)}));
+      return;
+    }
+
+    // Check usage limit
+    if (coupon.usageLimit != null && coupon.usedCount >= coupon.usageLimit!) {
+      customToster('coupon_max_usage_reached'.tr);
+      return;
+    }
+
+    // Check minimum order amount
+    if (coupon.minOrderAmount != null && subtotal < coupon.minOrderAmount!) {
+      customToster('coupon_min_order_not_met'.trParams({
+        'amount': '\$${(coupon.minOrderAmount! - subtotal).toStringAsFixed(2)}',
+      }));
+      return;
+    }
+
+    // Coupon is valid, apply it
+    _appliedCoupon = coupon;
+    _errorMessage = null;
+    update();
+    
+    final discount = coupon.calculateDiscount(subtotal);
+    log('Coupon applied successfully: ${coupon.code}, discount: $discount');
+
+    customToster('coupon_applied_you_saved'.trParams({
+      'amount': '\$${discount.toStringAsFixed(2)}',
+      'code': coupon.code,
+    }));
+  }
+
+  String _formatDate(DateTime date) {
+    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return '${months[date.month - 1]} ${date.day}, ${date.year}';
+  }
+
+  /// Remove applied coupon
+  void removeCoupon() {
+    final removedCode = _appliedCoupon?.code;
+    _appliedCoupon = null;
+    update();
+    log('Coupon removed');
+    
+    if (removedCode != null) {
+      customToster('coupon_code_removed'.trParams({'code': removedCode}));
+    }
+  }
+
+  /// Clear coupon when cart is cleared
+  // @override
+  // Future<void> clearCart() async {
+  //   try {
+  //     await cartRepoInterface.clearCart();
+  //     _cartItems.clear();
+  //     _appliedCoupon = null; // Clear coupon as well
+  //     update();
+  //
+  //     log('Cart cleared successfully');
+  //   } catch (e) {
+  //     _errorMessage = 'Failed to clear cart: $e';
+  //     log('Error clearing cart: $e');
+  //     update();
+  //   }
+  // }
+}

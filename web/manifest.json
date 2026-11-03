@@ -1,0 +1,19 @@
+{
+    "name": "Kiko Mart",
+    "short_name": "Kiko Mart",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#F5F7FA",
+    "theme_color": "#C92A2A",
+    "description": "Kiko Mart — browse, order and get it delivered.",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "icons/logo.png",
+            "sizes": "any",
+            "type": "image/png",
+            "purpose": "any"
+        }
+    ]
+}

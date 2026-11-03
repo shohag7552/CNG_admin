@@ -1,0 +1,2375 @@
+import 'dart:developer' show log;
+
+import 'package:kikomart_user_app/app/appwrite/payment_service.dart';
+import 'package:kikomart_user_app/app/modules/payment/domain/services/pending_payment_store.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:url_launcher/url_launcher.dart';
+import 'package:kikomart_user_app/app/common/widgets/app_map_layers.dart';
+import 'package:kikomart_user_app/app/common/widgets/auth_gate.dart';
+import 'package:kikomart_user_app/app/common/widgets/custom_appbar.dart';
+import 'package:kikomart_user_app/app/common/widgets/web_footer.dart';
+import 'package:kikomart_user_app/app/common/widgets/web_top_nav.dart';
+import 'package:kikomart_user_app/app/helper/dashboard_tab_bus.dart';
+import 'package:kikomart_user_app/app/modules/dashboard/widgets/web_profile_drawer.dart';
+import 'package:kikomart_user_app/app/common/widgets/custom_toster.dart';
+import 'package:kikomart_user_app/app/controllers/address_controller.dart';
+import 'package:kikomart_user_app/app/controllers/auth_controller.dart';
+import 'package:kikomart_user_app/app/controllers/cart_controller.dart';
+import 'package:kikomart_user_app/app/controllers/module_controller.dart';
+import 'package:kikomart_user_app/app/controllers/order_controller.dart';
+import 'package:kikomart_user_app/app/controllers/shipping_controller.dart';
+import 'package:kikomart_user_app/app/models/shipping_method_model.dart';
+import 'package:kikomart_user_app/app/controllers/profile_controller.dart';
+import 'package:kikomart_user_app/app/controllers/settings_controller.dart';
+import 'package:kikomart_user_app/app/enums/payment_method_enum.dart';
+import 'package:kikomart_user_app/app/helper/currency_helper.dart';
+import 'package:kikomart_user_app/app/helper/store_time_helper.dart';
+import 'package:kikomart_user_app/app/helper/routes/app_router.dart';
+import 'package:kikomart_user_app/app/models/address_model.dart';
+import 'package:kikomart_user_app/app/models/business_hours_model.dart';
+import 'package:kikomart_user_app/app/modules/checkout/widgets/address_selection_bottomsheet.dart';
+import 'package:kikomart_user_app/app/modules/checkout/widgets/edit_address_info_bottomsheet.dart';
+import 'package:kikomart_user_app/app/modules/checkout/widgets/delivery_schedule_bottomsheet.dart';
+import 'package:kikomart_user_app/app/modules/coupons/widgets/coupon_selection_bottomsheet.dart';
+import 'package:kikomart_user_app/app/modules/payment/payment_webview_screen.dart';
+import 'package:kikomart_user_app/app/resources/colors.dart';
+import 'package:kikomart_user_app/app/resources/constants.dart';
+import 'package:kikomart_user_app/app/resources/text_style.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:get/get.dart';
+import 'package:go_router/go_router.dart';
+import 'package:latlong2/latlong.dart';
+
+/// A checkout failure whose [message] is already translated and safe to show
+/// to the customer (unlike a raw exception).
+class _OrderError implements Exception {
+  final String message;
+  const _OrderError(this.message);
+}
+
+class CheckoutPage extends StatefulWidget {
+  const CheckoutPage({super.key});
+
+  @override
+  State<CheckoutPage> createState() => _CheckoutPageState();
+}
+
+class _CheckoutPageState extends State<CheckoutPage> {
+  // Web shell: content band (shared with the top nav, so the page lines up
+  // with the bar above it) + scaffold key for the top-nav profile drawer.
+  static const double _maxContentWidth = WebTopNav.maxContentWidth;
+  final GlobalKey<ScaffoldState> _webScaffoldKey = GlobalKey<ScaffoldState>();
+
+  final _instructionsController = TextEditingController();
+  // Only Stripe is actually configured server-side today. Extend this list
+  // when another gateway is wired up — the UI below just maps over it.
+  static const _enabledGateways = [PaymentGateway.stripe];
+  PaymentMethod _selectedPaymentMethod = PaymentMethod.cod;
+  PaymentGateway _selectedGateway = PaymentGateway.stripe;
+  bool _isPriceExpanded = false;
+  bool _isAddressExpanded = false;
+  AddressModel? _selectedAddress;
+  
+  // Delivery schedule. Null while the default "now" option is active — the
+  // live ASAP estimate is derived from business setup at build time; this only
+  // holds the label once a specific slot has been scheduled.
+  String? _scheduleDisplayText;
+  Map<String, dynamic>? scheduleData;
+
+  String _deliveryType = 'now'; // 'now' or 'schedule'
+  DateTime? _selectedDate;
+  String? _selectedTimeSlot;
+
+  // Ecommerce shipping
+  ShippingMethodModel? _selectedShipping;
+
+  bool get _isEcommerce => Get.find<ModuleController>().isEcommerce;
+
+  /// Whether this checkout collects a courier shipping method.
+  ///
+  /// Only ecommerce orders ship, and only when the store has shipping methods
+  /// switched on in business setup. With it off the store fulfils ecommerce
+  /// orders some other way (its own rider, collection), so there is nothing
+  /// for the customer to choose and the section is hidden entirely.
+  ///
+  /// Food is never affected: it uses the delivery-schedule section instead,
+  /// which this flag has no bearing on.
+  bool get _showsShipping =>
+      _isEcommerce &&
+      Get.find<SettingsController>().businessSetup?.isShippingMethodEnabled ==
+          true;
+
+  @override
+  void initState() {
+    super.initState();
+    // Auto-select default address
+    final addressController = Get.find<AddressController>();
+    if (addressController.defaultAddress != null) {
+      _selectedAddress = addressController.defaultAddress;
+    }
+
+    // Held until the first frame is on screen: [ShippingController] calls
+    // `update()` when the fetch lands, and asking a GetBuilder to rebuild
+    // while this page is still building throws. Waiting for the frame also
+    // means the shipping section is already laid out — in its loading state —
+    // before the read starts, instead of the page appearing with it missing.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _loadShippingMethods();
+      _hydrate();
+    });
+  }
+
+  /// Loads the courier options and preselects the first one.
+  ///
+  /// Skipped when this checkout does not collect a shipping method — a food
+  /// order, or a store with shipping switched off — because the list would
+  /// never be rendered and the Appwrite read would be wasted.
+  Future<void> _loadShippingMethods() async {
+    if (!_showsShipping) return;
+
+    final shippingController = Get.find<ShippingController>();
+    await shippingController.getShippingMethods();
+
+    if (!mounted) return;
+    if (_selectedShipping == null && shippingController.methods.isNotEmpty) {
+      setState(() => _selectedShipping = shippingController.methods.first);
+    }
+  }
+
+  /// Loads the data this page needs but does not own.
+  ///
+  /// Checkout is reachable directly by URL — a browser reload on `/checkout`,
+  /// or a deep link — and on that path nothing has fetched the cart or the
+  /// addresses yet. Both are normally loaded by the dashboard on mount, or by
+  /// `SessionManager.loadUserData` at login, and a cold load onto this route
+  /// runs neither. The result was a checkout that reported "your cart is
+  /// empty" over a cart with items in it, and no delivery address selected.
+  ///
+  /// Safe to call unconditionally: both fetches return immediately for guests,
+  /// and re-fetching on the normal cart → checkout path is worth it on a page
+  /// where stale prices or a stale address would be charged for real.
+  Future<void> _hydrate() async {
+    final addressController = Get.find<AddressController>();
+
+    await Future.wait([
+      Get.find<CartController>().getCartItems(),
+      addressController.fetchAddresses(),
+    ]);
+
+    if (!mounted) return;
+    // initState read `defaultAddress` before the list existed; re-read it now
+    // that the fetch has landed.
+    setState(() => _syncSelectedAddress(addressController));
+  }
+
+  void _syncSelectedAddress(AddressController addressController) {
+    // Re-bind to the freshest instance by id so inline edits reflect at once.
+    if (_selectedAddress != null) {
+      for (final address in addressController.addresses) {
+        if (address.id == _selectedAddress!.id) {
+          _selectedAddress = address;
+          return;
+        }
+      }
+    }
+    _selectedAddress = addressController.defaultAddress;
+  }
+
+  Future<void> _openEditAddressInfo() async {
+    if (_selectedAddress == null) return;
+    await EditAddressInfoBottomSheet.show(context, _selectedAddress!);
+    // The GetBuilder rebuild re-syncs _selectedAddress; refresh the view.
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _openLocationEditor() async {
+    final addressController = Get.find<AddressController>();
+    final base = _selectedAddress;
+    if (base == null) {
+      await _openMapAddressPicker();
+      return;
+    }
+
+    final initial = (base.latitude != null && base.longitude != null)
+        ? LatLng(base.latitude!, base.longitude!)
+        : Get.find<SettingsController>().defaultMapLocation;
+
+    final picked = await context.pushNamed<LatLng?>(
+      RouteNames.mapPicker,
+      extra: initial,
+    );
+    if (picked == null || !mounted) return;
+
+    final updated = await _composeAddressFromLocation(base, picked);
+    final ok = await addressController.saveAddressChanges(base.id, updated);
+    if (!mounted) return;
+    if (ok) {
+      setState(() => _syncSelectedAddress(addressController));
+      customToster('location_updated'.tr);
+    } else {
+      customToster('failed_to_update_address'.tr, isSuccess: false);
+    }
+  }
+
+  /// Reverse-geocodes the picked point and merges it onto the address,
+  /// keeping name/phone/default while refreshing street, city and postal.
+  Future<AddressModel> _composeAddressFromLocation(
+    AddressModel base,
+    LatLng pos,
+  ) async {
+    String line1 = base.addressLine1;
+    String city = base.city;
+    String postal = base.postalCode;
+
+    final place = await Get.find<AddressController>()
+        .reverseGeocode(pos.latitude, pos.longitude);
+    // Keep the existing textual address for any part that wasn't found.
+    if (place != null) {
+      if (place.street.isNotEmpty) line1 = place.street;
+      if (place.city.isNotEmpty) city = place.city;
+      if (place.postalCode.isNotEmpty) postal = place.postalCode;
+    }
+
+    return base.copyWith(
+      addressLine1: line1,
+      city: city,
+      postalCode: postal,
+      latitude: pos.latitude,
+      longitude: pos.longitude,
+    );
+  }
+
+  Future<void> _openAddressSelector() async {
+    final result = await AddressSelectionBottomSheet.show(
+      context,
+      initialAddress: _selectedAddress,
+    );
+
+    if (result != null) {
+      setState(() {
+        _selectedAddress = result;
+      });
+      Get.find<AddressController>().selectAddress(result);
+    }
+  }
+
+  Future<void> _openMapAddressPicker() async {
+    final addressController = Get.find<AddressController>();
+    final previousIds = addressController.addresses.map((address) => address.id).toSet();
+
+    await context.pushNamed(RouteNames.addEditAddress);
+    await addressController.fetchAddresses();
+
+    AddressModel? nextSelection;
+
+    for (final address in addressController.addresses) {
+      if (!previousIds.contains(address.id)) {
+        nextSelection = address;
+        break;
+      }
+    }
+
+    nextSelection ??= addressController.defaultAddress ?? _selectedAddress;
+
+    if (nextSelection != null && mounted) {
+      setState(() {
+        _selectedAddress = nextSelection;
+      });
+      addressController.selectAddress(nextSelection);
+    }
+  }
+
+  Future<void> _openDeliverySchedulePicker() async {
+    final result = await DeliveryScheduleBottomSheet.show(
+      context,
+      initialType: _deliveryType,
+      initialDate: _selectedDate,
+      initialTimeSlot: _selectedTimeSlot,
+    );
+
+    if (result != null) {
+      setState(() {
+        _deliveryType = result['type'];
+        _selectedDate = result['date'];
+        _selectedTimeSlot = result['timeSlot'];
+        _scheduleDisplayText = result['displayText'];
+      });
+    }
+  }
+
+  double? _calculateDistanceKm(SettingsController settingsController) {
+    final businessSetup = settingsController.businessSetup;
+    final address = _selectedAddress;
+
+    if (businessSetup?.storeLatitude == null ||
+        businessSetup?.storeLongitude == null ||
+        address?.latitude == null ||
+        address?.longitude == null) {
+      return null;
+    }
+
+    return const Distance().as(
+      LengthUnit.Kilometer,
+      LatLng(businessSetup!.storeLatitude!, businessSetup.storeLongitude!),
+      LatLng(address!.latitude!, address.longitude!),
+    );
+  }
+
+  double _calculateDeliveryFee(
+    CartController cartController,
+    SettingsController settingsController,
+  ) {
+    // Ecommerce with shipping methods on: the courier sets the price, so the
+    // fee comes straight off the selected method's own rate table.
+    if (_showsShipping) {
+      return _selectedShipping?.feeFor(cartController.total) ?? 0;
+    }
+
+    // Everything else falls through to the distance-based rate below: food
+    // orders, and ecommerce orders placed while shipping methods are off.
+    //
+    // With shipping off there are no couriers configured, so the store's own
+    // deliveryman brings the parcel — the same fulfilment as a food order, and
+    // therefore the same pricing: free above `free_delivery_above`, otherwise
+    // distance x `delivery_fee_per_km`, floored at `min_delivery_fee`.
+    final businessSetup = settingsController.businessSetup;
+    final orderAmount = cartController.total;
+    final freeDeliveryAbove = businessSetup?.freeDeliveryAbove;
+
+    if (freeDeliveryAbove != null && orderAmount >= freeDeliveryAbove) {
+      return 0;
+    }
+
+    final distanceKm = _calculateDistanceKm(settingsController);
+    final minFee = businessSetup?.minDeliveryFee ?? 0;
+    final feePerKm = businessSetup?.deliveryFeePerKm ?? 0;
+
+    if (distanceKm == null) {
+      return minFee;
+    }
+
+    final calculatedFee = distanceKm * feePerKm;
+    return calculatedFee < minFee ? minFee : calculatedFee;
+  }
+
+  bool _isOutsideDeliveryRadius(SettingsController settingsController) {
+    final maxRadius = settingsController.businessSetup?.maxDeliveryRadius;
+    final distanceKm = _calculateDistanceKm(settingsController);
+
+    if (maxRadius == null || distanceKm == null) {
+      return false;
+    }
+
+    return distanceKm > maxRadius;
+  }
+
+  /// Current store availability for immediate ("now") orders, plus a
+  /// human-readable next-opening label when closed.
+  ({bool isOpenNow, String? nextOpenLabel}) _storeStatus() {
+    final businessSetup = Get.find<SettingsController>().businessSetup;
+    if (businessSetup == null) {
+      return (isOpenNow: true, nextOpenLabel: null);
+    }
+    // Business hours are configured in the store's timezone, so evaluate
+    // "open now" against the store's wall-clock, not the device's.
+    final now = StoreTime.nowCivil();
+    if (businessSetup.isOpenNow(now)) {
+      return (isOpenNow: true, nextOpenLabel: null);
+    }
+    final next = businessSetup.nextOpening(now);
+    return (
+      isOpenNow: false,
+      nextOpenLabel: next == null ? null : _formatNextOpen(now, next),
+    );
+  }
+
+  String _formatNextOpen(DateTime now, DateTime next) {
+    final today = DateTime(now.year, now.month, now.day);
+    final nextDay = DateTime(next.year, next.month, next.day);
+    final diffDays = nextDay.difference(today).inDays;
+    final dayLabel = diffDays == 0
+        ? 'today'.tr
+        : diffDays == 1
+            ? 'tomorrow'.tr
+            : WeeklyBusinessHours.dayNames[next.weekday % 7];
+    final time = TimeOfDay.fromDateTime(next).format(context);
+    return 'opens_day_at_time'.trParams({'day': dayLabel, 'time': time});
+  }
+  
+  @override
+  void dispose() {
+    _instructionsController.dispose();
+    super.dispose();
+  }
+
+
+  @override
+  Widget build(BuildContext context) {
+    // Desktop web gets the shared top-nav shell + a two-column layout;
+    // mobile/tablet keep the original stacked flow with the bottom summary.
+    final useWebShell = WebTopNav.isEnabled(context);
+
+    return Scaffold(
+      key: _webScaffoldKey,
+      backgroundColor: context.scaffoldBackground,
+      endDrawer: useWebShell ? const WebProfileDrawer() : null,
+      appBar: useWebShell
+          ? WebTopNav(
+              selectedIndex: null,
+              onDestinationSelected: (index) {
+                DashboardTabs.open(context, index);
+              },
+              onMenuTap: () => _webScaffoldKey.currentState?.openEndDrawer(),
+            )
+          : CustomAppbar(title: 'checkout'.tr),
+      body: AuthGate(
+        child: GetBuilder<CartController>(
+        builder: (controller) {
+          if (controller.cartItems.isEmpty) {
+            // An in-flight first fetch also has an empty list. Reporting that
+            // as "your cart is empty" is the bug this guard exists for — on a
+            // cold load the real contents arrive a moment later.
+            final Widget state = controller.isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.shopping_cart_outlined,
+                          size: 80,
+                          color: context.textLight,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'your_cart_is_empty'.tr,
+                          style: poppinsBold.copyWith(
+                            fontSize: Constants.fontSizeLarge,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        ElevatedButton(
+                          onPressed: () => context.pop(),
+                          child: Text('go_back'.tr),
+                        ),
+                      ],
+                    ),
+                  );
+
+            // Web keeps its footer even with nothing to check out: a page that
+            // simply stops halfway down reads as broken rather than as empty.
+            // Mobile gets the bare state exactly as before.
+            return useWebShell
+                ? _buildWebPage(
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 80),
+                      child: state,
+                    ),
+                  )
+                : state;
+          }
+
+          if (useWebShell) return _buildWebBody(controller);
+
+          return Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildDeliveryAddress(),
+                      const SizedBox(height: 20),
+                      // Ecommerce shows shipping methods (when enabled); food
+                      // shows the delivery schedule. Ecommerce never shows the
+                      // schedule — its fulfilment date is not the customer's
+                      // to pick. The trailing gap lives inside the branch so
+                      // hiding the block does not leave a double space.
+                      if (_showsShipping) ...[
+                        _buildShippingSection(),
+                        const SizedBox(height: 20),
+                      ] else if (!_isEcommerce) ...[
+                        _buildDeliverySchedule(),
+                        const SizedBox(height: 20),
+                      ],
+                      _buildCouponSection(controller),
+                      const SizedBox(height: 20),
+                      _buildPaymentMethod(),
+                      const SizedBox(height: 20),
+                      _buildDeliveryInstructions(),
+                      const SizedBox(height: 10),
+                    ],
+                  ),
+                ),
+              ),
+
+              _buildBottomSummary(controller),
+            ],
+          );
+        },
+        ),
+      ),
+    );
+  }
+
+  /// The desktop-web page shell: [child], then the site footer.
+  ///
+  /// The footer is pushed to the bottom of the window when the page is shorter
+  /// than the viewport and simply follows the content when it is longer —
+  /// `minHeight` plus `spaceBetween` is what buys both without measuring
+  /// anything. Same arrangement the other web pages use, so checkout ends the
+  /// way the rest of the site does.
+  ///
+  /// [WebFooter] self-gates on the web shell, so this is only ever reached
+  /// from the desktop branches; mobile never builds it.
+  Widget _buildWebPage(Widget child) {
+    return LayoutBuilder(
+      builder: (context, viewport) => SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: viewport.maxHeight),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [child, const WebFooter()],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Web/desktop: centered two-column checkout ──
+  //   Left:  address · shipping/schedule · payment · instructions
+  //   Right: order summary rail — coupon, always-open breakdown, place order
+  Widget _buildWebBody(CartController controller) {
+    return _buildWebPage(
+      Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: _maxContentWidth),
+          child: Padding(
+            // The bar's own inset, so the title starts level with the logo.
+            padding: EdgeInsets.fromLTRB(
+              WebTopNav.bandInsetFor(MediaQuery.of(context).size.width), 24,
+              WebTopNav.bandInsetFor(MediaQuery.of(context).size.width), 40,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'checkout'.tr,
+                  style: poppinsBold.copyWith(
+                    fontSize: Constants.fontSizeOverLarge,
+                    color: context.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildDeliveryAddress(),
+                          const SizedBox(height: 20),
+                          // Same rule as the mobile column — see there.
+                          if (_showsShipping) ...[
+                            _buildShippingSection(),
+                            const SizedBox(height: 20),
+                          ] else if (!_isEcommerce) ...[
+                            _buildDeliverySchedule(),
+                            const SizedBox(height: 20),
+                          ],
+                          _buildPaymentMethod(),
+                          const SizedBox(height: 20),
+                          _buildDeliveryInstructions(),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 24),
+                    SizedBox(
+                      width: 380,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildCouponSection(controller),
+                          const SizedBox(height: 20),
+                          _buildWebSummaryCard(controller),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Web order-summary rail: the full price breakdown (always expanded — no
+  /// collapse toggle on desktop) plus the place-order button.
+  Widget _buildWebSummaryCard(CartController controller) {
+    final settingsController = Get.find<SettingsController>();
+    final deliveryFee = _calculateDeliveryFee(controller, settingsController);
+    final isOutsideRadius = _isOutsideDeliveryRadius(settingsController);
+    final storeStatus = _storeStatus();
+    final blockForClosed =
+        !_isEcommerce && _deliveryType == 'now' && !storeStatus.isOpenNow;
+    final total = controller.total + deliveryFee;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: context.cardBackground,
+        borderRadius: BorderRadius.circular(Constants.radiusLarge),
+        boxShadow: ColorResource.customShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'order_summary'.tr,
+            style: poppinsBold.copyWith(
+              fontSize: Constants.fontSizeLarge,
+              color: context.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildSummaryRow(
+            '${'cart_items_count'.tr} (${controller.itemCount})',
+            controller.originalSubtotal,
+          ),
+          if (controller.itemDiscountTotal > 0) ...[
+            const SizedBox(height: 8),
+            _buildSummaryRow(
+              'item_discount'.tr,
+              -controller.itemDiscountTotal,
+              isDiscount: true,
+            ),
+          ],
+          const SizedBox(height: 8),
+          _buildSummaryRow(
+            _showsShipping ? 'shipping'.tr : 'delivery_fee'.tr,
+            deliveryFee,
+          ),
+          if (isOutsideRadius) ...[
+            const SizedBox(height: 8),
+            Text(
+              'address_outside_delivery_radius'.tr,
+              style: poppinsMedium.copyWith(
+                fontSize: Constants.fontSizeSmall,
+                color: Colors.red,
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          _buildSummaryRow('${'tax'.tr} (${controller.vatPercentageLabel}%)', controller.tax),
+          if (controller.appliedCoupon != null) ...[
+            const SizedBox(height: 8),
+            _buildSummaryRow(
+              'coupon_discount'.tr,
+              -controller.discountAmount,
+              isDiscount: true,
+            ),
+          ],
+          const Divider(height: 24),
+          _buildSummaryRow('total'.tr, total, isTotal: true),
+          const SizedBox(height: 16),
+          _buildPlaceOrderButton(
+            controller,
+            deliveryFee: deliveryFee,
+            isOutsideRadius: isOutsideRadius,
+            blockForClosed: blockForClosed,
+            total: total,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeliveryAddress() {
+    return GetBuilder<AddressController>(
+      builder: (addressController) {
+        _syncSelectedAddress(addressController);
+        final settingsController = Get.find<SettingsController>();
+        final distanceKm = _calculateDistanceKm(settingsController);
+        final isOutsideRadius = _isOutsideDeliveryRadius(settingsController);
+        final address = _selectedAddress;
+
+        if (address == null) {
+          return _buildNoAddressCard();
+        }
+
+        final hasLatLng = address.latitude != null && address.longitude != null;
+
+        return Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: context.cardBackground,
+            borderRadius: BorderRadius.circular(Constants.radiusLarge),
+            boxShadow: ColorResource.customShadow,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Map preview with marker
+              _buildMapPreview(address, hasLatLng),
+
+              // Header — tap to expand/collapse
+              InkWell(
+                onTap: () => setState(
+                  () => _isAddressExpanded = !_isAddressExpanded,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.location_on,
+                        size: 22,
+                        color: ColorResource.primaryDark,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '${'deliver_to'.tr} • ${address.name}',
+                              style: poppinsBold.copyWith(
+                                fontSize: Constants.fontSizeDefault,
+                                color: context.textPrimary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              address.shortAddress,
+                              style: poppinsRegular.copyWith(
+                                fontSize: Constants.fontSizeSmall,
+                                color: context.textSecondary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      AnimatedRotation(
+                        duration: const Duration(milliseconds: 250),
+                        turns: _isAddressExpanded ? 0.5 : 0,
+                        child: Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          color: context.textSecondary,
+                          size: 26,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Expandable details
+              AnimatedSize(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeInOut,
+                alignment: Alignment.topCenter,
+                child: _isAddressExpanded
+                    ? _buildAddressDetails(address, distanceKm, isOutsideRadius)
+                    : const SizedBox(width: double.infinity),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMapPreview(AddressModel address, bool hasLatLng) {
+    if (!hasLatLng) {
+      return GestureDetector(
+        onTap: _openLocationEditor,
+        child: Container(
+          height: 130,
+          width: double.infinity,
+          color: Theme.of(context).disabledColor.withValues(alpha: 0.08),
+          alignment: Alignment.center,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.map_outlined, size: 30, color: context.textLight),
+              const SizedBox(height: 8),
+              Text(
+                'set_location_on_map'.tr,
+                style: poppinsMedium.copyWith(
+                  fontSize: Constants.fontSizeSmall,
+                  color: context.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final point = LatLng(address.latitude!, address.longitude!);
+
+    return GestureDetector(
+      onTap: _openLocationEditor,
+      child: SizedBox(
+        height: 150,
+        width: double.infinity,
+        child: Stack(
+          children: [
+            FlutterMap(
+              key: ValueKey(
+                '${address.id}_${address.latitude}_${address.longitude}',
+              ),
+              options: MapOptions(
+                initialCenter: point,
+                initialZoom: 15.5,
+                interactionOptions: const InteractionOptions(
+                  flags: InteractiveFlag.none,
+                ),
+              ),
+              children: [
+                const AppTileLayer(),
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      point: point,
+                      width: 44,
+                      height: 44,
+                      child: Icon(
+                        Icons.location_on,
+                        color: ColorResource.primaryDark,
+                        size: 40,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const PositionedDirectional(
+              bottom: Constants.paddingSizeExtraSmall,
+              start: Constants.paddingSizeExtraSmall,
+              child: MapAttribution(),
+            ),
+            if (address.isDefault)
+              Positioned(top: 8, left: 8, child: _buildDefaultChip()),
+            Positioned(
+              bottom: 8,
+              right: 8,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: context.cardBackground.withValues(alpha: 0.92),
+                  borderRadius: BorderRadius.circular(999),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.edit_location_alt_outlined,
+                      size: 14,
+                      color: ColorResource.primaryDark,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'set_location_on_map'.tr,
+                      style: poppinsMedium.copyWith(
+                        fontSize: Constants.fontSizeExtraSmall,
+                        color: ColorResource.primaryDark,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDefaultChip() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: ColorResource.primaryDark,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        'default'.tr,
+        style: poppinsBold.copyWith(
+          fontSize: Constants.fontSizeExtraSmall,
+          color: ColorResource.textWhite,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAddressDetails(
+    AddressModel address,
+    double? distanceKm,
+    bool isOutsideRadius,
+  ) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Divider(color: context.textLight.withValues(alpha: 0.2)),
+          _buildDetailRow('recipient'.tr, address.name),
+          _buildDetailRow('phone'.tr, address.phone),
+          _buildDetailRow('address'.tr, address.fullAddress),
+          if (distanceKm != null)
+            _buildDetailRow(
+              'distance'.tr,
+              isOutsideRadius
+                  ? '${distanceKm.toStringAsFixed(2)} km • ${'outside_delivery_radius'.tr}'
+                  : '${distanceKm.toStringAsFixed(2)} km',
+              valueColor: isOutsideRadius ? Colors.red : null,
+            ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _openEditAddressInfo,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: ColorResource.primaryDark,
+                    side: BorderSide(
+                      color: ColorResource.primaryDark.withValues(alpha: 0.4),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  label: Text(
+                    'edit_details'.tr,
+                    style: poppinsBold.copyWith(
+                      fontSize: Constants.fontSizeSmall,
+                      color: ColorResource.primaryDark,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _openAddressSelector,
+                  style: ElevatedButton.styleFrom(
+                    elevation: 0,
+                    backgroundColor: ColorResource.primaryDark,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: const Icon(Icons.swap_horiz_rounded, size: 18),
+                  label: Text(
+                    'change_address'.tr,
+                    style: poppinsBold.copyWith(
+                      fontSize: Constants.fontSizeSmall,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value, {Color? valueColor}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 84,
+            child: Text(
+              label,
+              style: poppinsRegular.copyWith(
+                fontSize: Constants.fontSizeSmall,
+                color: context.textSecondary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: poppinsMedium.copyWith(
+                fontSize: Constants.fontSizeDefault,
+                color: valueColor ?? context.textPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoAddressCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: context.cardBackground,
+        borderRadius: BorderRadius.circular(Constants.radiusLarge),
+        boxShadow: ColorResource.customShadow,
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: ColorResource.primaryDark.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.add_location_alt_outlined,
+              color: ColorResource.primaryDark,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'add_delivery_address'.tr,
+              style: poppinsMedium.copyWith(
+                fontSize: Constants.fontSizeDefault,
+                color: context.textPrimary,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          ElevatedButton(
+            onPressed: _openMapAddressPicker,
+            style: ElevatedButton.styleFrom(
+              elevation: 0,
+              backgroundColor: ColorResource.primaryDark,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: Text(
+              'add'.tr,
+              style: poppinsBold.copyWith(
+                fontSize: Constants.fontSizeSmall,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildShippingSection() {
+    return GetBuilder<ShippingController>(
+      builder: (shippingController) {
+        final methods = shippingController.methods;
+        final cartTotal = Get.find<CartController>().total;
+
+        return Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: context.cardBackground,
+            borderRadius: BorderRadius.circular(Constants.radiusLarge),
+            boxShadow: ColorResource.customShadow,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.local_shipping_outlined,
+                    color: ColorResource.primaryDark,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'shipping_method'.tr,
+                    style: poppinsBold.copyWith(
+                      fontSize: Constants.fontSizeLarge,
+                      color: context.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (shippingController.isLoading && methods.isEmpty)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: CircularProgressIndicator(),
+                  ),
+                )
+              else if (methods.isEmpty)
+                Text(
+                  'no_shipping_methods'.tr,
+                  style: poppinsRegular.copyWith(
+                    fontSize: Constants.fontSizeSmall,
+                    color: context.textSecondary,
+                  ),
+                )
+              else
+                ...methods.map((m) => _buildShippingTile(m, cartTotal)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildShippingTile(ShippingMethodModel method, double cartTotal) {
+    final isSelected = _selectedShipping?.id == method.id;
+    final fee = method.feeFor(cartTotal);
+    return GestureDetector(
+      onTap: () => setState(() => _selectedShipping = method),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? ColorResource.primaryDark.withValues(alpha: 0.06)
+              : context.scaffoldBackground,
+          borderRadius: BorderRadius.circular(Constants.radiusDefault),
+          border: Border.all(
+            color: isSelected
+                ? ColorResource.primaryDark
+                : Colors.transparent,
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              isSelected
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_off,
+              color: isSelected
+                  ? ColorResource.primaryDark
+                  : context.textLight,
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    method.name,
+                    style: poppinsBold.copyWith(
+                      fontSize: Constants.fontSizeDefault,
+                      color: context.textPrimary,
+                    ),
+                  ),
+                  if ((method.estimatedDays ?? '').isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      method.estimatedDays!,
+                      style: poppinsRegular.copyWith(
+                        fontSize: Constants.fontSizeSmall,
+                        color: context.textSecondary,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Text(
+              fee <= 0 ? 'free'.tr : CurrencyHelper.formatAmount(fee),
+              style: poppinsBold.copyWith(
+                fontSize: Constants.fontSizeDefault,
+                color: fee <= 0
+                    ? ColorResource.success
+                    : ColorResource.primaryDark,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCouponSection(CartController controller) {
+    return controller.appliedCoupon != null
+        ? _buildAppliedCoupon(controller)
+        : _buildApplyCouponPrompt(controller);
+  }
+
+  Future<void> _openCouponSheet(CartController controller) async {
+    final result = await CouponSelectionBottomSheet.showAdaptive(context);
+    if (result != null) {
+      controller.applyCoupon(result);
+    }
+  }
+
+  Widget _buildApplyCouponPrompt(CartController controller) {
+    return GestureDetector(
+      onTap: () => _openCouponSheet(controller),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: context.cardBackground,
+          borderRadius: BorderRadius.circular(Constants.radiusLarge),
+          boxShadow: ColorResource.customShadow,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: ColorResource.primaryDark.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.local_offer_rounded,
+                size: 22,
+                color: ColorResource.primaryDark,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'have_a_promo_code'.tr,
+                    style: poppinsBold.copyWith(
+                      fontSize: Constants.fontSizeDefault,
+                      color: context.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'apply_to_save'.tr,
+                    style: poppinsRegular.copyWith(
+                      fontSize: Constants.fontSizeSmall,
+                      color: context.textSecondary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            ElevatedButton(
+              onPressed: () => _openCouponSheet(controller),
+              style: ElevatedButton.styleFrom(
+                elevation: 0,
+                backgroundColor: ColorResource.primaryDark,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                'apply'.tr,
+                style: poppinsBold.copyWith(
+                  fontSize: Constants.fontSizeSmall,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAppliedCoupon(CartController controller) {
+    final coupon = controller.appliedCoupon!;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: ColorResource.success.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(Constants.radiusLarge),
+        border: Border.all(
+          color: ColorResource.success.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: ColorResource.success.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.local_offer_rounded,
+              size: 22,
+              color: ColorResource.success,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: context.cardBackground,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: ColorResource.success.withValues(alpha: 0.4),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.confirmation_number_outlined,
+                        size: 13,
+                        color: ColorResource.success,
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        coupon.code,
+                        style: poppinsBold.copyWith(
+                          fontSize: Constants.fontSizeSmall,
+                          color: Colors.green.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '${'you_saved_amount'.tr} ${CurrencyHelper.formatAmount(controller.discountAmount)}',
+                  style: poppinsBold.copyWith(
+                    fontSize: Constants.fontSizeSmall,
+                    color: Colors.green.shade700,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: () => controller.removeCoupon(),
+            style: TextButton.styleFrom(
+              foregroundColor: ColorResource.error,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+            child: Text(
+              'remove'.tr,
+              style: poppinsBold.copyWith(
+                fontSize: Constants.fontSizeSmall,
+                color: ColorResource.error,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeliveryInstructions() {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.cardBackground,
+        borderRadius: BorderRadius.circular(Constants.radiusLarge),
+        boxShadow: ColorResource.customShadow,
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'delivery_instructions'.tr,
+            style: poppinsBold.copyWith(
+              fontSize: Constants.fontSizeLarge,
+              color: context.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _instructionsController,
+            decoration: InputDecoration(
+              hintText: 'delivery_instructions_hint'.tr,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(Constants.radiusDefault),
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+            maxLines: 3,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentMethod() {
+    final businessSetup = Get.find<SettingsController>().businessSetup;
+    final codActive = businessSetup?.acceptsCash ?? true; // is_cod_active
+    final onlineActive =
+        businessSetup?.acceptsOnlinePayment ?? false; // is_digital_active
+    final walletActive =
+        businessSetup?.acceptsDigitalWallet ?? false; // is_wallet_active
+
+    // Keep the chosen method within what's actually enabled.
+    final available = <PaymentMethod>[
+      if (codActive) PaymentMethod.cod,
+      if (onlineActive) PaymentMethod.online,
+      if (walletActive) PaymentMethod.wallet,
+    ];
+    if (available.isNotEmpty && !available.contains(_selectedPaymentMethod)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _selectedPaymentMethod = available.first);
+      });
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: context.cardBackground,
+        borderRadius: BorderRadius.circular(Constants.radiusLarge),
+        boxShadow: ColorResource.customShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              'payment_method'.tr,
+              style: poppinsBold.copyWith(
+                fontSize: Constants.fontSizeLarge,
+                color: context.textPrimary,
+              ),
+            ),
+          ),
+          const Divider(height: 1),
+          if (codActive) RadioListTile<PaymentMethod>(
+            value: PaymentMethod.cod,
+            groupValue: _selectedPaymentMethod,
+            onChanged: (value) => setState(() => _selectedPaymentMethod = value!),
+            title: Row(
+              children: [
+                Icon(Icons.money, color: Colors.green),
+                const SizedBox(width: 12),
+                Text(
+                  'cash_on_delivery'.tr,
+                  style: poppinsMedium.copyWith(fontSize: Constants.fontSizeDefault),
+                ),
+              ],
+            ),
+            subtitle: Text(
+              'pay_when_you_receive'.tr,
+              style: poppinsRegular.copyWith(
+                fontSize: Constants.fontSizeSmall,
+                color: context.textSecondary,
+              ),
+            ),
+            activeColor: ColorResource.primaryDark,
+          ),
+          if (onlineActive) RadioListTile<PaymentMethod>(
+            value: PaymentMethod.online,
+            groupValue: _selectedPaymentMethod,
+            onChanged: (value) => setState(() => _selectedPaymentMethod = value!),
+            title: Row(
+              children: [
+                Icon(Icons.credit_card, color: _selectedPaymentMethod == PaymentMethod.online ? ColorResource.primaryDark : context.textLight),
+                const SizedBox(width: 12),
+                Text(
+                  'online_payment'.tr,
+                  style: poppinsMedium.copyWith(
+                    fontSize: Constants.fontSizeDefault,
+                    color: _selectedPaymentMethod == PaymentMethod.online ? context.textPrimary : context.textLight,
+                  ),
+                ),
+              ],
+            ),
+            subtitle: Text(
+              'pay_securely_online'.tr,
+              style: poppinsRegular.copyWith(
+                fontSize: Constants.fontSizeSmall,
+                color: _selectedPaymentMethod == PaymentMethod.online ? context.textSecondary : context.textLight,
+              ),
+            ),
+            activeColor: ColorResource.primaryDark,
+          ),
+          // Gateway selection chips — visible when online is selected
+          if (onlineActive) AnimatedSize(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            child: _selectedPaymentMethod == PaymentMethod.online
+                ? Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'choose_gateway'.tr,
+                          style: poppinsMedium.copyWith(
+                            fontSize: Constants.fontSizeSmall,
+                            color: context.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: _enabledGateways.map((gateway) {
+                            final isSelected = _selectedGateway == gateway;
+                            return ChoiceChip(
+                              label: Text(gateway.displayName),
+                              selected: isSelected,
+                              onSelected: (_) => setState(() => _selectedGateway = gateway),
+                              selectedColor: ColorResource.primaryDark.withValues(alpha: 0.15),
+                              backgroundColor: context.scaffoldBackground,
+                              labelStyle: poppinsMedium.copyWith(
+                                fontSize: Constants.fontSizeSmall,
+                                color: isSelected ? ColorResource.primaryDark : context.textSecondary,
+                              ),
+                              side: BorderSide(
+                                color: isSelected ? ColorResource.primaryDark : Colors.grey.shade300,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _selectedGateway.description,
+                          style: poppinsRegular.copyWith(
+                            fontSize: Constants.fontSizeExtraSmall,
+                            color: context.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
+          if (walletActive) GetBuilder<ProfileController>(
+            builder: (profileController) {
+              final walletBalance = profileController.walletBalance;
+              return RadioListTile<PaymentMethod>(
+                value: PaymentMethod.wallet,
+                groupValue: _selectedPaymentMethod,
+                onChanged: (value) => setState(() => _selectedPaymentMethod = value!),
+                title: Row(
+                  children: [
+                    Icon(Icons.account_balance_wallet, color: _selectedPaymentMethod == PaymentMethod.wallet ? ColorResource.primaryDark : context.textLight),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'wallet'.tr,
+                        style: poppinsMedium.copyWith(
+                          fontSize: Constants.fontSizeDefault,
+                          color: _selectedPaymentMethod == PaymentMethod.wallet ? context.textPrimary : context.textLight,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: walletBalance > 0
+                            ? Colors.green.withValues(alpha: 0.1)
+                            : Colors.red.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        CurrencyHelper.formatAmount(walletBalance),
+                        style: poppinsBold.copyWith(
+                          fontSize: Constants.fontSizeSmall,
+                          color: walletBalance > 0 ? Colors.green.shade700 : Colors.red.shade700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                subtitle: Text(
+                  'pay_from_wallet_balance'.tr,
+                  style: poppinsRegular.copyWith(
+                    fontSize: Constants.fontSizeSmall,
+                    color: _selectedPaymentMethod == PaymentMethod.wallet ? context.textSecondary : context.textLight,
+                  ),
+                ),
+                activeColor: ColorResource.primaryDark,
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomSummary(CartController controller) {
+    final settingsController = Get.find<SettingsController>();
+    final deliveryFee = _calculateDeliveryFee(controller, settingsController);
+    final isOutsideRadius = _isOutsideDeliveryRadius(settingsController);
+    final storeStatus = _storeStatus();
+    // Immediate orders are blocked while the store is closed; scheduled
+    // orders for a future slot remain allowed.
+    final blockForClosed =
+        !_isEcommerce && _deliveryType == 'now' && !storeStatus.isOpenNow;
+    final total = controller.total + deliveryFee;
+    
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: context.cardBackground,
+        boxShadow: [
+          BoxShadow(
+            color: ColorResource.shadowMedium,
+            blurRadius: 10,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Expandable price breakdown
+            AnimatedSize(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+              child: _isPriceExpanded
+                  ? Column(
+                      children: [
+                        _buildSummaryRow('${'cart_items_count'.tr} (${controller.itemCount})', controller.originalSubtotal),
+                        if (controller.itemDiscountTotal > 0) ...[
+                          const SizedBox(height: 8),
+                          _buildSummaryRow('item_discount'.tr, -controller.itemDiscountTotal, isDiscount: true),
+                        ],
+                        const SizedBox(height: 8),
+                        _buildSummaryRow(
+                          _showsShipping ? 'shipping'.tr : 'delivery_fee'.tr,
+                          deliveryFee,
+                        ),
+                        if (isOutsideRadius) ...[
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: AlignmentDirectional.centerStart,
+                            child: Text(
+                              'address_outside_delivery_radius'.tr,
+                              style: poppinsMedium.copyWith(
+                                fontSize: Constants.fontSizeSmall,
+                                color: Colors.red,
+                              ),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                        _buildSummaryRow('${'tax'.tr} (${controller.vatPercentageLabel}%)', controller.tax),
+                        if (controller.appliedCoupon != null) ...[
+                          const SizedBox(height: 8),
+                          _buildSummaryRow('coupon_discount'.tr, -controller.discountAmount, isDiscount: true),
+                        ],
+                        const Divider(height: 20),
+                      ],
+                    )
+                  : const SizedBox.shrink(),
+            ),
+            
+            // Total row with expand/collapse button
+            GestureDetector(
+              onTap: () {
+                setState(() {
+                  _isPriceExpanded = !_isPriceExpanded;
+                });
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: ColorResource.primaryDark.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(Constants.radiusDefault),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsetsDirectional.only(start: 12),
+                      child: Row(
+                        children: [
+                          Text(
+                            'total'.tr,
+                            style: poppinsBold.copyWith(
+                              fontSize: Constants.fontSizeLarge,
+                              color: context.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          AnimatedRotation(
+                            duration: const Duration(milliseconds: 300),
+                            turns: _isPriceExpanded ? 0.5 : 0,
+                            child: Icon(
+                              Icons.keyboard_arrow_up_rounded,
+                              color: ColorResource.primaryDark,
+                              size: 24,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsetsDirectional.only(end: 12),
+                      child: Text(
+                        CurrencyHelper.formatAmount(total),
+                        style: poppinsBold.copyWith(
+                          fontSize: Constants.fontSizeLarge,
+                          color: ColorResource.primaryDark,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            
+            const SizedBox(height: 16),
+
+            // Place order button
+            _buildPlaceOrderButton(
+              controller,
+              deliveryFee: deliveryFee,
+              isOutsideRadius: isOutsideRadius,
+              blockForClosed: blockForClosed,
+              total: total,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Place-order CTA with its blocked states (outside radius / store closed /
+  /// placing spinner). Shared by the mobile bottom bar and the web summary.
+  Widget _buildPlaceOrderButton(
+    CartController controller, {
+    required double deliveryFee,
+    required bool isOutsideRadius,
+    required bool blockForClosed,
+    required double total,
+  }) {
+    return GetBuilder<OrderController>(
+      builder: (orderController) {
+        return SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: orderController.isPlacingOrder ||
+                    isOutsideRadius ||
+                    blockForClosed
+                ? null
+                : () => _placeOrder(controller, total, deliveryFee, controller.tax),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: ColorResource.primaryDark,
+              // Muted grey when unavailable, dimmed brand while placing.
+              disabledBackgroundColor: (isOutsideRadius || blockForClosed)
+                  ? context.textLight.withValues(alpha: 0.5)
+                  : ColorResource.primaryDark.withValues(alpha: 0.6),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(Constants.radiusLarge),
+              ),
+            ),
+            child: orderController.isPlacingOrder
+                ? SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      color: ColorResource.textWhite,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : isOutsideRadius
+                    ? _buildBlockedButtonContent(
+                        Icons.location_off_outlined,
+                        'cannot_deliver_to_address'.tr,
+                      )
+                    : blockForClosed
+                        ? _buildBlockedButtonContent(
+                            Icons.store_mall_directory_outlined,
+                            'store_closed'.tr,
+                          )
+                        : Text(
+                            '${'place_order_with_total'.tr} - ${CurrencyHelper.formatAmount(total)}',
+                            style: poppinsBold.copyWith(
+                              fontSize: Constants.fontSizeLarge,
+                              color: ColorResource.textWhite,
+                            ),
+                          ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBlockedButtonContent(IconData icon, String label) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(icon, color: ColorResource.textWhite, size: 20),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: poppinsBold.copyWith(
+              fontSize: Constants.fontSizeDefault,
+              color: ColorResource.textWhite,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSummaryRow(String label, double amount, {bool isTotal = false, bool isDiscount = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: (isTotal ? poppinsBold : poppinsRegular).copyWith(
+            fontSize: isTotal ? Constants.fontSizeLarge : Constants.fontSizeDefault,
+            color: isDiscount ? Colors.green : context.textPrimary,
+          ),
+        ),
+        Text(
+          CurrencyHelper.formatAmount(amount),
+          style: (isTotal ? poppinsBold : poppinsMedium).copyWith(
+            fontSize: isTotal ? Constants.fontSizeLarge : Constants.fontSizeDefault,
+            color: isDiscount ? Colors.green : (isTotal ? ColorResource.primaryDark : context.textPrimary),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// True when there is nothing to order, having told the customer why.
+  ///
+  /// Toast rather than the order-failed page: an empty cart is not a failed
+  /// order, it is an order that was never started, and routing it through the
+  /// failure screen would offer a retry that can only fail the same way.
+  bool _isCartEmpty(CartController cartController) {
+    if (cartController.cartItems.isNotEmpty) return false;
+    customToster('cannot_place_order_empty_cart'.tr, isSuccess: false);
+    return true;
+  }
+
+  Future<void> _placeOrder(
+    CartController cartController,
+    double total,
+    double deliveryFee,
+    double taxAmount,
+  ) async {
+    // Nothing to buy. Reachable even though the screen swaps itself for an
+    // empty-cart state: the order-failed page's retry closure calls straight
+    // back in here, carrying the totals from the original attempt. Without this
+    // it would post an order with no items and a non-zero amount.
+    if (_isCartEmpty(cartController)) return;
+
+    // Validate address selection
+    if (_selectedAddress == null) {
+      customToster('please_select_delivery_address'.tr, isSuccess: false);
+      return;
+    }
+
+    final settingsController = Get.find<SettingsController>();
+    // Delivery radius + store hours only constrain the food module.
+    if (!_isEcommerce && _isOutsideDeliveryRadius(settingsController)) {
+      customToster('address_outside_delivery_radius'.tr, isSuccess: false);
+      return;
+    }
+
+    if (!_isEcommerce && _deliveryType == 'now' && !_storeStatus().isOpenNow) {
+      customToster('store_is_currently_closed'.tr, isSuccess: false);
+      return;
+    }
+
+    // Ecommerce requires a shipping method — but only when the store actually
+    // offers them. Without this guard, turning shipping off would make every
+    // ecommerce order impossible to place.
+    if (_showsShipping && _selectedShipping == null) {
+      customToster('please_select_shipping_method'.tr, isSuccess: false);
+      return;
+    }
+
+    // ─── Wallet: pre-validate balance before confirmation dialog ───
+    if (_selectedPaymentMethod == PaymentMethod.wallet) {
+      final profileController = Get.find<ProfileController>();
+      await profileController.fetchUserProfile();
+      final walletBalance = profileController.walletBalance;
+
+      if (walletBalance < total) {
+        customToster(
+          'insufficient_wallet_balance_detail'.trParams({
+            'balance': CurrencyHelper.formatAmount(walletBalance),
+            'total': CurrencyHelper.formatAmount(total),
+          }),
+          isSuccess: false,
+        );
+        return;
+      }
+    }
+
+    // Show confirmation dialog
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'confirm_order'.tr,
+          style: poppinsBold.copyWith(fontSize: Constants.fontSizeLarge),
+        ),
+        content: Text(
+          'confirm_place_order_for_amount'.trParams({'amount': CurrencyHelper.formatAmount(total)}),
+          style: poppinsRegular.copyWith(fontSize: Constants.fontSizeDefault),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('cancel'.tr, style: poppinsMedium.copyWith(color: context.textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: ColorResource.primaryDark),
+            child: Text('confirm'.tr, style: poppinsBold.copyWith(color: ColorResource.textWhite)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    // Re-checked after the dialog: the wallet lookup and the confirmation are
+    // both awaits, and the cart can be emptied under them — another tab on web,
+    // another device, or a refresh that comes back empty.
+    if (_isCartEmpty(cartController)) return;
+
+    try {
+      final orderController = Get.find<OrderController>();
+      final authController = Get.find<AuthController>();
+      final profileController = Get.find<ProfileController>();
+      String? userId = await authController.getUserId();
+
+      if (userId == null) {
+        throw _OrderError('login_required'.tr);
+      }
+
+      final itemDiscountTotal = cartController.itemDiscountTotal;
+      final couponDiscountAmount = cartController.discountAmount;
+
+      // Writes the order row with the given final payment status. Called only
+      // once the payment outcome (or COD/wallet equivalent) is already known,
+      // so a failed/cancelled payment never leaves a row behind for the store
+      // to see.
+      Future<Map<String, dynamic>> createOrderRow(String paymentStatus) {
+        return orderController.placeOrder(
+          customerId: userId,
+          address: _selectedAddress!,
+          cartItems: cartController.cartItems,
+          totalAmount: total,
+          deliveryFee: deliveryFee,
+          taxAmount: taxAmount,
+          discountAmount: itemDiscountTotal,
+          couponDiscount: couponDiscountAmount,
+          paymentMethod: _selectedPaymentMethod.name,
+          paymentStatus: paymentStatus,
+          deliveryInstructions: _instructionsController.text.trim(),
+          deliveryType: _isEcommerce ? null : _deliveryType,
+          scheduledDate: _isEcommerce ? null : _selectedDate,
+          scheduledTimeSlot: _isEcommerce ? null : _selectedTimeSlot,
+          // Courier-only fields. With shipping off the amount is a delivery
+          // fee, already sent as `deliveryFee` above — repeating it as
+          // `shippingCost` would report the same charge to the store twice.
+          shippingCost: _showsShipping ? deliveryFee : null,
+          shippingMethod: _showsShipping ? _selectedShipping?.name : null,
+        );
+      }
+
+      final Map<String, dynamic> result;
+
+      // ── Online payment — pay first, create the order only once the gateway
+      // confirms. Nothing is written to Appwrite before that point, on either
+      // platform; only how the customer reaches the gateway differs. ──
+      if (_selectedPaymentMethod == PaymentMethod.online) {
+        final paymentService = PaymentService();
+        final profile = profileController.userProfile;
+        final currency = 'usd'; // settingsController.businessSetup?.currency ?? 'BDT';
+
+        // Convert total to smallest currency unit (cents/poisha)
+        final amountInSmallest = (total * 100).toInt();
+
+        // No DB order exists yet, so the gateway only gets a local, temporary
+        // reference — matches PaymentService.createPayment's own contract.
+        final tempReference = 'temp_${DateTime.now().millisecondsSinceEpoch}';
+
+        // Show loading while creating payment session
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (_) => const Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final Map<String, dynamic> paymentResult;
+        try {
+          paymentResult = await paymentService.createPayment(
+            gateway: _selectedGateway.key,
+            amount: amountInSmallest,
+            orderId: tempReference,
+            currency: currency,
+            customerName: profile?.name,
+            customerEmail: profile?.email,
+            customerPhone: profile?.phone,
+            // Web returns to the site it is actually served from, so the
+            // success page always finds the order saved below. Mobile keeps
+            // the function's configured URLs (its WebView matches the path).
+            successURL: kIsWeb
+                ? '${Uri.base.origin}${PaymentService.successPath}'
+                : null,
+            cancelURL: kIsWeb
+                ? '${Uri.base.origin}${PaymentService.cancelPath}'
+                : null,
+          );
+        } catch (e) {
+          log('Payment initiation error: $e');
+          // Dismiss loading dialog safely
+          if (mounted) Navigator.of(context).pop();
+          rethrow;
+        }
+
+        // Dismiss loading dialog
+        if (mounted) Navigator.of(context).pop();
+
+        final paymentURL = paymentResult['data']?['paymentURL'] as String?;
+        if (paymentURL == null || paymentURL.isEmpty) {
+          log('Payment gateway returned no URL');
+          throw _OrderError('payment_failed_try_again'.tr);
+        }
+
+        // ── Web: hand the whole tab over to the gateway ──
+        //
+        // The in-app WebView is an iframe on web, and an iframe never reports
+        // the cross-origin redirect the gateway finishes on — the result would
+        // be invisible and the customer stuck on a completed payment. So the
+        // tab navigates away instead and comes back on /payment/success, where
+        // [PaymentReturnPage] writes the order. That page needs these details
+        // and this screen will not exist by then, so they go to disk first.
+        if (kIsWeb) {
+          await PendingPaymentStore.save(
+            PendingPayment(
+              customerId: userId,
+              address: _selectedAddress!,
+              cartItems: cartController.cartItems,
+              totalAmount: total,
+              deliveryFee: deliveryFee,
+              taxAmount: taxAmount,
+              discountAmount: itemDiscountTotal,
+              couponDiscount: couponDiscountAmount,
+              paymentMethod: _selectedPaymentMethod.name,
+              deliveryInstructions: _instructionsController.text.trim(),
+              deliveryType: _isEcommerce ? null : _deliveryType,
+              scheduledDate: _isEcommerce ? null : _selectedDate,
+              scheduledTimeSlot: _isEcommerce ? null : _selectedTimeSlot,
+              shippingCost: _showsShipping ? deliveryFee : null,
+              shippingMethod: _showsShipping ? _selectedShipping?.name : null,
+              moduleType: ModuleController.current,
+              // What the return page checks against Stripe before writing.
+              reference: tempReference,
+              sessionId: paymentResult['data']?['sessionId'] as String?,
+              amountMinor: amountInSmallest,
+              currency: currency,
+              createdAt: DateTime.now(),
+            ),
+          );
+
+          final launched = await launchUrl(
+            Uri.parse(paymentURL),
+            webOnlyWindowName: '_self',
+          );
+          if (!launched) {
+            await PendingPaymentStore.clear();
+            throw _OrderError('could_not_open_payment_page'.tr);
+          }
+          return;
+        }
+
+        // ── Mobile: the native WebView can intercept the callback itself ──
+        if (!mounted) return;
+        final webViewResult = await context.pushNamed<PaymentResult?>(
+          RouteNames.payment,
+          extra: PaymentArgs(
+            paymentURL: paymentURL,
+            gatewayName: _selectedGateway.displayName,
+          ),
+        );
+
+        if (webViewResult != PaymentResult.success) {
+          // ❌ Payment failed or cancelled — nothing was ever written, so
+          // there is nothing to roll back.
+          final message = webViewResult == PaymentResult.failed
+              ? 'payment_failed_try_again'.tr
+              : 'payment_was_cancelled'.tr;
+          customToster(message, isSuccess: false);
+          return;
+        }
+
+        // ✅ Payment succeeded — now create the order, already marked paid.
+        result = await createOrderRow('paid');
+      } else if (_selectedPaymentMethod == PaymentMethod.wallet) {
+        // ── Wallet payment — deduct first, create the order only if it
+        // succeeds. ──
+        final deducted = await profileController.deductWalletBalance(total);
+        if (!deducted) {
+          customToster('failed_to_deduct_wallet_balance'.tr, isSuccess: false);
+          return;
+        }
+        result = await createOrderRow('paid');
+      } else {
+        // ── Cash on delivery — no external payment step to fail. ──
+        result = await createOrderRow('unpaid');
+      }
+
+      if (result['success'] != true) {
+        throw _OrderError(result['error'] ?? 'failed_to_place_order'.tr);
+      }
+
+      final orderNumber = result['orderNumber'] as String;
+
+      // ─── Reduce stock, clear cart & coupon, navigate to success ───
+      await orderController.finalizePlacedOrder(cartController.cartItems);
+
+      if (mounted) {
+        context.goNamed(
+          RouteNames.orderSuccess,
+          extra: OrderSuccessArgs(
+            orderNumber: orderNumber,
+            totalAmount: total,
+          ),
+        );
+      }
+    } catch (e) {
+      log('Place order failed: $e');
+      // Navigate to failed page
+      if (mounted) {
+        context.pushNamed(
+          RouteNames.orderFailed,
+          extra: OrderFailedArgs(
+            errorMessage: e is _OrderError ? e.message : 'failed_to_place_order'.tr,
+            onRetry: () => _placeOrder(cartController, total, deliveryFee, taxAmount),
+          ),
+        );
+      }
+    }
+  }
+  /// Build delivery schedule section with bottom sheet
+  Widget _buildDeliverySchedule() {
+    final isNow = _deliveryType == 'now';
+    final storeStatus = _storeStatus();
+    final showClosed = isNow && !storeStatus.isOpenNow;
+    final scheduleTitle = isNow ? 'deliver_now'.tr : 'scheduled_delivery'.tr;
+    // Live ASAP estimate from business setup (falls back when unconfigured).
+    final businessSetup = Get.find<SettingsController>().businessSetup;
+    final asapEstimate =
+        businessSetup?.asapEstimateLabel ?? 'asap_30_45_mins'.tr;
+    final scheduleSubtitle =
+        isNow ? asapEstimate : (_scheduleDisplayText ?? asapEstimate);
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: context.cardBackground,
+        borderRadius: BorderRadius.circular(Constants.radiusLarge),
+        boxShadow: ColorResource.customShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: ColorResource.primaryDark.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isNow ? Icons.flash_on_rounded : Icons.schedule_rounded,
+                  size: 22,
+                  color: ColorResource.primaryDark,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            scheduleTitle,
+                            style: poppinsBold.copyWith(
+                              fontSize: Constants.fontSizeDefault,
+                              color: context.textPrimary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: ColorResource.primaryDark
+                                .withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            isNow ? 'asap'.tr : 'scheduled'.tr,
+                            style: poppinsBold.copyWith(
+                              fontSize: Constants.fontSizeExtraSmall,
+                              color: ColorResource.primaryDark,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      scheduleSubtitle,
+                      style: poppinsRegular.copyWith(
+                        fontSize: Constants.fontSizeSmall,
+                        color: context.textSecondary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              OutlinedButton(
+                onPressed: _openDeliverySchedulePicker,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: ColorResource.primaryDark,
+                  side: BorderSide(
+                    color: ColorResource.primaryDark.withValues(alpha: 0.4),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: Text(
+                  'change'.tr,
+                  style: poppinsBold.copyWith(
+                    fontSize: Constants.fontSizeSmall,
+                    color: ColorResource.primaryDark,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (showClosed) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange[50],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.orange[200]!),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.info_outline, color: Colors.orange[700], size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'store_is_currently_closed'.tr,
+                          style: poppinsBold.copyWith(
+                            fontSize: Constants.fontSizeSmall,
+                            color: Colors.orange[900],
+                          ),
+                        ),
+                        if (storeStatus.nextOpenLabel != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            storeStatus.nextOpenLabel!,
+                            style: poppinsRegular.copyWith(
+                              fontSize: Constants.fontSizeSmall,
+                              color: Colors.orange[900],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+
+
+}

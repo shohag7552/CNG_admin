@@ -1,0 +1,268 @@
+import 'package:kikomart_user_app/app/common/widgets/web_top_nav.dart';
+import 'package:kikomart_user_app/app/helper/dashboard_tab_bus.dart';
+import 'package:kikomart_user_app/app/helper/routes/app_router.dart';
+import 'package:kikomart_user_app/app/modules/dashboard/widgets/web_profile_drawer.dart';
+import 'package:kikomart_user_app/app/resources/colors.dart';
+import 'package:kikomart_user_app/app/resources/constants.dart';
+import 'package:kikomart_user_app/app/resources/text_style.dart';
+import 'package:kikomart_user_app/app/common/widgets/directional_flip.dart';
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:go_router/go_router.dart';
+
+class OrderFailedPage extends StatefulWidget {
+  final String errorMessage;
+  final VoidCallback? onRetry;
+
+  const OrderFailedPage({
+    super.key,
+    required this.errorMessage,
+    this.onRetry,
+  });
+
+  @override
+  State<OrderFailedPage> createState() => _OrderFailedPageState();
+}
+
+class _OrderFailedPageState extends State<OrderFailedPage> {
+  /// Error content reads like a dialog — keep it a narrow centered column on
+  /// desktop web instead of stretching edge to edge.
+  static const double _maxContentWidth = 480;
+
+  /// Diameter of the failure mark's filled disc — same as the success page.
+  static const double _errorMarkSize = 80;
+
+  final GlobalKey<ScaffoldState> _webScaffoldKey = GlobalKey<ScaffoldState>();
+
+  String get errorMessage => widget.errorMessage;
+  VoidCallback? get onRetry => widget.onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final useWebShell = WebTopNav.isEnabled(context);
+
+    return PopScope(
+      canPop: true,
+      child: Scaffold(
+        key: _webScaffoldKey,
+        backgroundColor: context.scaffoldBackground,
+        endDrawer: useWebShell ? const WebProfileDrawer() : null,
+        appBar: useWebShell
+            ? WebTopNav(
+                selectedIndex: null,
+                onDestinationSelected: (index) {
+                  DashboardTabs.open(context, index);
+                },
+                onMenuTap: () => _webScaffoldKey.currentState?.openEndDrawer(),
+              )
+            : null,
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: ConstrainedBox(
+                  constraints:
+                      const BoxConstraints(maxWidth: _maxContentWidth),
+                  child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Error Animation
+                    _buildErrorAnimation(),
+                    const SizedBox(height: Constants.paddingSizeLarge),
+
+                    // Error Message
+                    Text(
+                      'order_failed'.tr,
+                      style: poppinsBold.copyWith(
+                        fontSize: Constants.fontSizeExtraLarge + 4,
+                        color: context.textPrimary,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+
+                    Text(
+                      'could_not_process_order'.tr,
+                      style: poppinsRegular.copyWith(
+                        fontSize: Constants.fontSizeDefault,
+                        color: context.textSecondary,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 40),
+
+                    // Error Details Card
+                    _buildErrorDetailsCard(),
+                    const SizedBox(height: 40),
+
+                    // Action Buttons
+                    _buildActionButtons(context),
+                  ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Status mark: a compact filled disc inside a soft tinted halo, sized to
+  /// match the success page's mark so both outcomes read as the same system.
+  Widget _buildErrorAnimation() {
+    return Container(
+      width: _errorMarkSize + Constants.paddingSizeLarge,
+      height: _errorMarkSize + Constants.paddingSizeLarge,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: ColorResource.error.withValues(alpha: 0.12),
+      ),
+      child: Container(
+        width: _errorMarkSize,
+        height: _errorMarkSize,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: ColorResource.error,
+          boxShadow: [
+            BoxShadow(
+              color: ColorResource.error.withValues(alpha: 0.25),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Icon(
+          Icons.close_rounded,
+          size: Constants.iconSizeLarge,
+          color: ColorResource.textWhite,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorDetailsCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: context.cardBackground,
+        borderRadius: BorderRadius.circular(Constants.radiusLarge),
+        boxShadow: ColorResource.customShadow,
+        border: Border.all(
+          color: Colors.red.shade200,
+          width: 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            Icons.info_outline,
+            size: 40,
+            color: Colors.red.shade400,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'error_details'.tr,
+            style: poppinsBold.copyWith(
+              fontSize: Constants.fontSizeLarge,
+              color: context.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            errorMessage,
+            style: poppinsRegular.copyWith(
+              fontSize: Constants.fontSizeDefault,
+              color: context.textSecondary,
+              height: 1.5,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButtons(BuildContext context) {
+    return Column(
+      children: [
+        // Retry Button
+        if (onRetry != null)
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                context.pop(); // Go back to checkout
+                onRetry?.call(); // Trigger retry
+              },
+              icon: const Icon(Icons.refresh),
+              label: Text(
+                'try_again'.tr,
+                style: poppinsBold.copyWith(
+                  fontSize: Constants.fontSizeLarge,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: ColorResource.primaryDark,
+                foregroundColor: ColorResource.textWhite,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(Constants.radiusLarge),
+                ),
+              ),
+            ),
+          ),
+        if (onRetry != null) const SizedBox(height: 16),
+
+        // Go Back Button
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () {
+              context.pop(); // Go back to checkout
+            },
+            icon: const DirectionalFlip(child: Icon(Icons.arrow_back)),
+            label: Text(
+              'go_back_to_checkout'.tr,
+              style: poppinsBold.copyWith(
+                fontSize: Constants.fontSizeLarge,
+              ),
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: context.textSecondary,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              side: BorderSide(
+                color: context.textSecondary,
+                width: 2,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(Constants.radiusLarge),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // Home Button
+        TextButton.icon(
+          onPressed: () {
+            context.goNamed(RouteNames.dashboard); // Go to home
+          },
+          icon: const Icon(Icons.home_outlined),
+          label: Text(
+            'go_to_home'.tr,
+            style: poppinsMedium.copyWith(
+              fontSize: Constants.fontSizeDefault,
+            ),
+          ),
+          style: TextButton.styleFrom(
+            foregroundColor: ColorResource.primaryDark,
+          ),
+        ),
+      ],
+    );
+  }
+}

@@ -1,0 +1,39 @@
+import 'package:kikomart_user_app/app/models/review_model.dart';
+
+abstract class ReviewRepoInterface {
+  /// Get all reviews for a specific product
+  Future<List<ReviewModel>> getProductReviews(String productId);
+
+  /// Get all reviews by a specific user
+  Future<List<ReviewModel>> getUserReviews(String userId);
+
+  /// Submit a new review
+  Future<ReviewModel> submitReview(ReviewModel review);
+
+  /// Update an existing review
+  Future<ReviewModel> updateReview(String reviewId, Map<String, dynamic> data);
+
+  /// Delete a review
+  Future<void> deleteReview(String reviewId);
+
+  /// Toggle the current user's "helpful" mark on a review.
+  /// Returns the updated review (with the new helpful list/count).
+  Future<ReviewModel> toggleHelpful(String reviewId, String userId);
+
+  /// Check if user has reviewed a product
+  Future<bool> hasUserReviewedProduct(
+    String userId,
+    String productId, {
+    String? orderId,
+  });
+
+  /// Get a user's review for a specific product
+  Future<ReviewModel?> getUserProductReview(
+    String userId,
+    String productId, {
+    String? orderId,
+  });
+
+  /// Get average rating for a product
+  Future<double> getProductAverageRating(String productId);
+}

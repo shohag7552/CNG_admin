@@ -1,0 +1,673 @@
+import 'package:kikomart_user_app/app/common/widgets/app_map_layers.dart';
+import 'package:kikomart_user_app/app/common/widgets/auth_gate.dart';
+import 'package:kikomart_user_app/app/common/widgets/custom_appbar.dart';
+import 'package:kikomart_user_app/app/common/widgets/custom_toster.dart';
+import 'package:kikomart_user_app/app/common/widgets/web_top_nav.dart';
+import 'package:kikomart_user_app/app/controllers/address_controller.dart';
+import 'package:kikomart_user_app/app/controllers/auth_controller.dart';
+import 'package:kikomart_user_app/app/controllers/settings_controller.dart';
+import 'package:kikomart_user_app/app/helper/dashboard_tab_bus.dart';
+import 'package:kikomart_user_app/app/helper/routes/app_router.dart';
+import 'package:kikomart_user_app/app/modules/dashboard/widgets/web_profile_drawer.dart';
+import 'package:kikomart_user_app/app/models/address_model.dart';
+import 'package:kikomart_user_app/app/modules/address/widgets/address_form_field.dart';
+import 'package:kikomart_user_app/app/modules/address/widgets/address_form_section.dart';
+import 'package:kikomart_user_app/app/modules/address/widgets/address_save_bar.dart';
+import 'package:kikomart_user_app/app/resources/colors.dart';
+import 'package:kikomart_user_app/app/resources/constants.dart';
+import 'package:kikomart_user_app/app/resources/text_style.dart';
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:get/get.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:location/location.dart' as loc;
+
+class AddEditAddressPage extends StatefulWidget {
+  final AddressModel? address; // Null for add, non-null for edit
+
+  const AddEditAddressPage({super.key, this.address});
+
+  @override
+  State<AddEditAddressPage> createState() => _AddEditAddressPageState();
+}
+
+class _AddEditAddressPageState extends State<AddEditAddressPage> {
+  final _formKey = GlobalKey<FormState>();
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  /// Caps the content width on desktop web so the form + map stay readable
+  /// instead of stretching edge to edge.
+  static const double _maxContentWidth = 1080;
+
+  /// Below this inner width the web card stacks the map above the form; at or
+  /// above it they sit side by side.
+  static const double _twoColumnWidth = 720;
+
+  late TextEditingController _nameController;
+  late TextEditingController _phoneController;
+  late TextEditingController _addressLine1Controller;
+  late TextEditingController _addressLine2Controller;
+  late TextEditingController _cityController;
+  late TextEditingController _postalCodeController;
+
+  bool _isDefault = false;
+  bool _isSaving = false;
+
+  late MapController _mapController;
+  LatLng? _selectedLocation;
+  LatLng get _defaultLocation =>
+      Get.find<SettingsController>().defaultMapLocation;
+
+  final loc.Location _locationService = loc.Location();
+  bool _isLoadingLocation = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Initialize controllers with existing data if editing
+    _nameController = TextEditingController(text: widget.address?.name ?? '');
+    _phoneController = TextEditingController(text: widget.address?.phone ?? '');
+    _addressLine1Controller = TextEditingController(text: widget.address?.addressLine1 ?? '');
+    _addressLine2Controller = TextEditingController(text: widget.address?.addressLine2 ?? '');
+    _cityController = TextEditingController(text: widget.address?.city ?? '');
+    _postalCodeController = TextEditingController(text: widget.address?.postalCode ?? '');
+    _isDefault = widget.address?.isDefault ?? false;
+
+    _mapController = MapController();
+    if (widget.address?.latitude != null && widget.address?.longitude != null) {
+      _selectedLocation = LatLng(widget.address!.latitude!, widget.address!.longitude!);
+    } else {
+      _selectedLocation = _defaultLocation;
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _addressLine1Controller.dispose();
+    _addressLine2Controller.dispose();
+    _cityController.dispose();
+    _postalCodeController.dispose();
+    super.dispose();
+  }
+
+  /// Fills the address fields from the pinned map position. Keeps the
+  /// current text when nothing is found or the map has moved on since.
+  Future<void> _getAddressFromLatLng(LatLng position) async {
+    final place = await Get.find<AddressController>()
+        .reverseGeocode(position.latitude, position.longitude);
+    if (!mounted || place == null) return;
+    setState(() {
+      _addressLine1Controller.text = place.addressLine;
+      _cityController.text = place.city;
+      _postalCodeController.text = place.postalCode;
+    });
+  }
+
+  Future<void> _openFullScreenMap() async {
+    final selectedLocation = await context.pushNamed<LatLng?>(
+      RouteNames.mapPicker,
+      extra: _selectedLocation ?? _defaultLocation,
+    );
+
+    if (selectedLocation != null) {
+      setState(() {
+        _selectedLocation = selectedLocation;
+      });
+      _mapController.move(selectedLocation, 16.0);
+      _getAddressFromLatLng(selectedLocation);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEditing = widget.address != null;
+    // Desktop web keeps the shared top-nav + account drawer; mobile/tablet use
+    // the page's own app bar with a back button.
+    final showWebNav = WebTopNav.isEnabled(context);
+
+    return Scaffold(
+      key: _scaffoldKey,
+      backgroundColor: context.scaffoldBackground,
+      appBar: showWebNav
+          ? WebTopNav(
+              selectedIndex: null,
+              onDestinationSelected: (index) =>
+                  DashboardTabs.open(context, index),
+              onMenuTap: () => _scaffoldKey.currentState?.openEndDrawer(),
+            )
+          : CustomAppbar(
+              title: isEditing ? 'edit_address'.tr : 'add_address'.tr,
+            ),
+      endDrawer: showWebNav ? const WebProfileDrawer() : null,
+      body: AuthGate(
+        child: Form(
+          key: _formKey,
+          child: AutofillGroup(
+            child: showWebNav
+                ? _buildWebBody(context, isEditing)
+                : _buildMobileBody(),
+          ),
+        ),
+      ),
+      // Sticky save action — stays pinned above the system nav bar (and the
+      // keyboard) however far the form is scrolled.
+      bottomNavigationBar: AddressSaveBar(
+        label: isEditing ? 'update_address'.tr : 'save_address'.tr,
+        isSaving: _isSaving,
+        onSave: _saveAddress,
+        isWeb: showWebNav,
+        maxContentWidth: showWebNav ? _maxContentWidth : double.infinity,
+        onCancel: showWebNav ? () => context.pop() : null,
+      ),
+    );
+  }
+
+  /// Mobile / tablet: stacked section cards. The save button lives in the
+  /// sticky bottom bar, so the list only needs a little trailing space.
+  Widget _buildMobileBody() {
+    return ListView(
+      padding: const EdgeInsets.all(Constants.paddingSizeDefault),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      children: [
+        _locationSection(mapHeight: 220),
+        const SizedBox(height: Constants.paddingSizeDefault),
+        ..._formSections(),
+        const SizedBox(height: Constants.paddingSizeDefault),
+      ],
+    );
+  }
+
+  /// Desktop web: a full-width scroll surface (so dragging anywhere — including
+  /// the side gutters — scrolls) with a centred, width-capped layout. On wide
+  /// viewports the map and form sit side by side (a standard web address-entry
+  /// layout); narrower widths stack them.
+  Widget _buildWebBody(BuildContext context, bool isEditing) {
+    return SingleChildScrollView(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: _maxContentWidth),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: Constants.paddingSizeLarge,
+              vertical: Constants.paddingSizeExtraLarge,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isEditing ? 'edit_address'.tr : 'add_address'.tr,
+                  style: poppinsBold.copyWith(
+                    fontSize: Constants.fontSizeOverLarge,
+                    color: context.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: Constants.paddingSizeExtraSmall),
+                Text(
+                  'address_page_subtitle'.tr,
+                  style: poppinsRegular.copyWith(
+                    fontSize: Constants.fontSizeDefault,
+                    color: context.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: Constants.paddingSizeLarge),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    // Side-by-side when there's room; otherwise stack.
+                    if (constraints.maxWidth >= _twoColumnWidth) {
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            flex: 6,
+                            child: _locationSection(mapHeight: 480),
+                          ),
+                          const SizedBox(width: Constants.paddingSizeLarge),
+                          Expanded(
+                            flex: 5,
+                            child: Column(children: _formSections()),
+                          ),
+                        ],
+                      );
+                    }
+                    return Column(
+                      children: [
+                        _locationSection(mapHeight: 300),
+                        const SizedBox(height: Constants.paddingSizeDefault),
+                        ..._formSections(),
+                      ],
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Map card: the pin picker plus a hint on how to use it.
+  Widget _locationSection({required double mapHeight}) {
+    return AddressFormSection(
+      icon: Icons.map_outlined,
+      title: 'location_map'.tr,
+      subtitle: 'drag_map_to_pin_location'.tr,
+      child: _mapSection(height: mapHeight),
+    );
+  }
+
+  /// The interactive map with the centre pin, address-fetch spinner, and the
+  /// full-screen / my-location controls. [height] lets the web two-column
+  /// layout use a taller map than the mobile stack.
+  Widget _mapSection({required double height}) {
+    return Container(
+      height: height,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(Constants.radiusDefault),
+        border: Border.all(color: context.textLight.withValues(alpha: 0.2)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(Constants.radiusDefault),
+        child: Stack(
+          children: [
+            FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(
+                initialCenter: _selectedLocation ?? _defaultLocation,
+                initialZoom: 15.0,
+                onMapEvent: (MapEvent event) {
+                  if (event is MapEventMoveEnd) {
+                    setState(() {
+                      _selectedLocation = _mapController.camera.center;
+                    });
+                    _getAddressFromLatLng(_selectedLocation!);
+                  }
+                },
+              ),
+              children: const [
+                AppTileLayer(),
+                Align(
+                  alignment: AlignmentDirectional.bottomStart,
+                  child: Padding(
+                    padding: EdgeInsets.all(Constants.paddingSizeExtraSmall),
+                    child: MapAttribution(),
+                  ),
+                ),
+              ],
+            ),
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.only(bottom: 40.0), // Offset pin so tip points to center
+                child: Icon(
+                  Icons.location_on,
+                  color: ColorResource.error,
+                  size: 40,
+                ),
+              ),
+            ),
+            Positioned(
+              top: Constants.paddingSizeSmall,
+              left: Constants.paddingSizeSmall,
+              child: GetBuilder<AddressController>(
+                builder: (addressController) => addressController.isGeocoding
+                    ? _mapChip(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            const SizedBox(width: Constants.paddingSizeSmall),
+                            Text(
+                              'fetching_address'.tr,
+                              style: poppinsMedium.copyWith(
+                                fontSize: Constants.fontSizeSmall,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            ),
+            Positioned(
+              top: Constants.paddingSizeSmall,
+              right: Constants.paddingSizeSmall,
+              child: _buildMapControlButton(
+                icon: Icons.fullscreen,
+                onPressed: _openFullScreenMap,
+                tooltip: 'full_screen_map'.tr,
+              ),
+            ),
+            Positioned(
+              bottom: Constants.paddingSizeSmall,
+              right: Constants.paddingSizeSmall,
+              child: _buildMapControlButton(
+                icon: Icons.my_location,
+                onPressed: _isLoadingLocation ? null : _getCurrentLocation,
+                tooltip: 'my_location'.tr,
+                isLoading: _isLoadingLocation,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// A small floating label over the map. Map tiles are always light, so the
+  /// chip is deliberately light in both themes.
+  Widget _mapChip({required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: Constants.paddingSizeSmall,
+        vertical: Constants.paddingSizeExtraSmall + 2,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(Constants.radiusExtraLarge),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+
+  /// Contact + address cards and the default toggle (shared by mobile & web).
+  List<Widget> _formSections() {
+    return [
+      AddressFormSection(
+        icon: Icons.person_outline_rounded,
+        title: 'contact_details'.tr,
+        child: Column(
+          children: [
+            AddressFormField(
+              controller: _nameController,
+              label: 'full_name'.tr,
+              hint: 'enter_full_name'.tr,
+              icon: Icons.person_outline,
+              autofillHints: const [AutofillHints.name],
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'please_enter_your_name'.tr;
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: Constants.paddingSizeDefault),
+            AddressFormField(
+              controller: _phoneController,
+              label: 'phone_number'.tr,
+              hint: 'enter_phone_number'.tr,
+              icon: Icons.phone_outlined,
+              keyboardType: TextInputType.phone,
+              textCapitalization: TextCapitalization.none,
+              autofillHints: const [AutofillHints.telephoneNumber],
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'please_enter_phone_number'.tr;
+                }
+                if (value.trim().length < 10) {
+                  return 'please_enter_valid_phone_number'.tr;
+                }
+                return null;
+              },
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: Constants.paddingSizeDefault),
+      AddressFormSection(
+        icon: Icons.home_outlined,
+        title: 'address_details'.tr,
+        child: Column(
+          children: [
+            AddressFormField(
+              controller: _addressLine1Controller,
+              label: 'address'.tr,
+              hint: 'address_line1_hint'.tr,
+              icon: Icons.location_on_outlined,
+              autofillHints: const [AutofillHints.streetAddressLine1],
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'please_enter_address'.tr;
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: Constants.paddingSizeDefault),
+            AddressFormField(
+              controller: _addressLine2Controller,
+              label: 'address_line2_label'.tr,
+              hint: 'address_line2_hint'.tr,
+              icon: Icons.apartment_outlined,
+              isRequired: false,
+              autofillHints: const [AutofillHints.streetAddressLine2],
+            ),
+            const SizedBox(height: Constants.paddingSizeDefault),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: AddressFormField(
+                    controller: _cityController,
+                    label: 'city'.tr,
+                    hint: 'city'.tr,
+                    icon: Icons.location_city_outlined,
+                    autofillHints: const [AutofillHints.addressCity],
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'required'.tr;
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+                const SizedBox(width: Constants.paddingSizeSmall),
+                Expanded(
+                  child: AddressFormField(
+                    controller: _postalCodeController,
+                    label: 'postal_code'.tr,
+                    hint: 'postal_code'.tr,
+                    icon: Icons.markunread_mailbox_outlined,
+                    keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.done,
+                    textCapitalization: TextCapitalization.none,
+                    autofillHints: const [AutofillHints.postalCode],
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'required'.tr;
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: Constants.paddingSizeDefault),
+      _defaultToggle(),
+    ];
+  }
+
+  /// "Set as default" as its own tappable card row.
+  Widget _defaultToggle() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(Constants.radiusLarge),
+        border: Border.all(
+          color: _isDefault
+              ? ColorResource.primaryDark.withValues(alpha: 0.5)
+              : context.textLight.withValues(alpha: 0.15),
+        ),
+      ),
+      // Wrapped in its own (transparent) Material so the ListTile paints its
+      // ink on it rather than on a decorated ancestor, which would otherwise
+      // trip a framework assertion.
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(Constants.radiusLarge),
+        clipBehavior: Clip.antiAlias,
+        child: SwitchListTile.adaptive(
+          value: _isDefault,
+          onChanged: (value) => setState(() => _isDefault = value),
+          secondary: Icon(
+            _isDefault ? Icons.star_rounded : Icons.star_outline_rounded,
+            color: _isDefault ? ColorResource.primaryDark : context.textSecondary,
+          ),
+          title: Text(
+            'set_as_default_address'.tr,
+            style: poppinsMedium.copyWith(
+              fontSize: Constants.fontSizeDefault,
+              color: context.textPrimary,
+            ),
+          ),
+          subtitle: Text(
+            'default_address_hint'.tr,
+            style: poppinsRegular.copyWith(
+              fontSize: Constants.fontSizeSmall,
+              color: context.textSecondary,
+            ),
+          ),
+          activeTrackColor: ColorResource.primaryDark,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: Constants.paddingSizeDefault,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMapControlButton({
+    required IconData icon,
+    required VoidCallback? onPressed,
+    required String tooltip,
+    bool isLoading = false,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(Constants.radiusSmall),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: IconButton(
+        icon: isLoading
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Icon(icon, color: ColorResource.primaryDark),
+        onPressed: onPressed,
+        tooltip: tooltip,
+        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+        padding: EdgeInsets.zero,
+      ),
+    );
+  }
+
+  Future<void> _getCurrentLocation() async {
+    setState(() => _isLoadingLocation = true);
+    try {
+      bool serviceEnabled = await _locationService.serviceEnabled();
+      if (!serviceEnabled) {
+        serviceEnabled = await _locationService.requestService();
+        if (!serviceEnabled) {
+          return;
+        }
+      }
+
+      loc.PermissionStatus permissionGranted = await _locationService.hasPermission();
+      if (permissionGranted == loc.PermissionStatus.denied) {
+        permissionGranted = await _locationService.requestPermission();
+        if (permissionGranted != loc.PermissionStatus.granted) {
+          return;
+        }
+      }
+
+      final locationData = await _locationService.getLocation();
+      if (locationData.latitude != null && locationData.longitude != null) {
+        final newLocation = LatLng(locationData.latitude!, locationData.longitude!);
+        _mapController.move(newLocation, 16.0);
+        setState(() {
+          _selectedLocation = newLocation;
+        });
+        _getAddressFromLatLng(newLocation);
+      }
+    } catch (e) {
+      debugPrint('Error getting location: $e');
+      customToster('could_not_fetch_location'.tr, isSuccess: false);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingLocation = false);
+      }
+    }
+  }
+
+  Future<void> _saveAddress() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() => _isSaving = true);
+
+    try {
+      final controller = Get.find<AddressController>();
+      String? userId = await Get.find<AuthController>().getUserId();
+
+      if (userId == null) {
+        throw Exception('User not logged in');
+      }
+
+      final address = AddressModel(
+        id: widget.address?.id ?? '',
+        userId: userId,
+        name: _nameController.text.trim(),
+        phone: _phoneController.text.trim(),
+        addressLine1: _addressLine1Controller.text.trim(),
+        addressLine2: _addressLine2Controller.text.trim(),
+        city: _cityController.text.trim(),
+        postalCode: _postalCodeController.text.trim(),
+        isDefault: _isDefault,
+        latitude: _selectedLocation?.latitude,
+        longitude: _selectedLocation?.longitude,
+      );
+
+      final saved = widget.address == null
+          ? await controller.addAddress(address)
+          : await controller.updateAddress(widget.address!.id, address);
+
+      // Navigation stays in the view: close the page once the save succeeds.
+      if (saved && mounted) {
+        context.pop();
+      }
+    } catch (e) {
+      customToster('failed_to_save_address'.tr, isSuccess: false);
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+}

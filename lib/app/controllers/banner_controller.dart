@@ -1,0 +1,51 @@
+import 'dart:developer';
+import 'package:kikomart_user_app/app/models/banner_model.dart';
+import 'package:kikomart_user_app/app/modules/banners/domain/repository/banner_repo_interface.dart';
+import 'package:get/get.dart';
+
+class BannerController extends GetxController implements GetxService {
+  final BannerRepoInterface bannerRepoInterface;
+  
+  BannerController({required this.bannerRepoInterface});
+
+  bool _isLoading = false;
+  bool get isLoading => _isLoading;
+
+  List<BannerModel> _banners = [];
+  List<BannerModel> get banners => _banners;
+
+  String? _errorMessage;
+  String? get errorMessage => _errorMessage;
+
+  void clearForModuleSwitch() {
+    _banners = [];
+    _errorMessage = null;
+    update();
+  }
+
+  /// Fetch active banners
+  Future<void> getBanners({bool reload = false}) async {
+    try {
+      _isLoading = true;
+      _errorMessage = null;
+      if(!reload) {
+        update();
+      }
+
+      _banners = await bannerRepoInterface.getActiveBanners();
+      log('====> Banners loaded: ${_banners.length}');
+      
+      _isLoading = false;
+      update();
+    } catch (e) {
+      _isLoading = false;
+      _errorMessage = 'failed_to_load_banners'.tr;
+      log('====> Error loading banners: $e');
+      update();
+    }
+  }
+
+  // Future<void> sendNotification() async {
+  //   await bannerRepoInterface.sendNotification();
+  // }
+}

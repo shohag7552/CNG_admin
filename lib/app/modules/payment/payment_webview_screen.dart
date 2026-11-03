@@ -1,0 +1,222 @@
+// lib/screens/payment_webview_screen.dart
+
+import 'package:kikomart_user_app/app/appwrite/payment_service.dart';
+import 'package:kikomart_user_app/app/common/widgets/custom_appbar.dart';
+import 'package:kikomart_user_app/app/resources/colors.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:get/get.dart';
+import 'package:go_router/go_router.dart';
+
+enum PaymentResult { success, failed, cancelled }
+
+class PaymentWebViewScreen extends StatefulWidget {
+  final String paymentURL;
+  final String gatewayName;
+
+  const PaymentWebViewScreen({
+    super.key,
+    required this.paymentURL,
+    required this.gatewayName,
+  });
+
+  @override
+  State<PaymentWebViewScreen> createState() => _PaymentWebViewScreenState();
+}
+
+class _PaymentWebViewScreenState extends State<PaymentWebViewScreen> {
+  bool _isLoading = true;
+  bool _hasError = false;
+  double _progress = 0;
+  InAppWebViewController? _controller;
+  bool _resultHandled = false;
+
+  void _checkURL(String? urlString) {
+    if (urlString == null || _resultHandled) return;
+
+    // Matched on path rather than the full callback URL: the function's host
+    // changes on every redeploy, and the customer must not get stranded on a
+    // completed payment because a hardcoded domain went stale.
+    final path = Uri.tryParse(urlString)?.path;
+    if (path == null || path.isEmpty) return;
+
+    if (path.startsWith(PaymentService.successPath)) {
+      _resultHandled = true;
+      context.pop(PaymentResult.success);
+    } else if (path.startsWith(PaymentService.failPath)) {
+      _resultHandled = true;
+      context.pop(PaymentResult.failed);
+    } else if (path.startsWith(PaymentService.cancelPath)) {
+      _resultHandled = true;
+      context.pop(PaymentResult.cancelled);
+    }
+  }
+
+  Future<bool> _onBackPressed() async {
+    // Check if web view can go back within the payment flow
+    if (_controller != null && await _controller!.canGoBack()) {
+      _controller!.goBack();
+      return false;
+    }
+
+    // Show confirmation dialog before cancelling payment
+    final shouldLeave = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('cancel_payment_question'.tr),
+        content: Text(
+          'payment_not_complete_leave_confirm'.tr,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('stay'.tr),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: Text('leave'.tr),
+          ),
+        ],
+      ),
+    );
+
+    return shouldLeave ?? false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final shouldPop = await _onBackPressed();
+        if (shouldPop && context.mounted) {
+          context.pop(PaymentResult.cancelled);
+        }
+      },
+      child: Scaffold(
+        appBar: CustomAppbar(
+          title: 'pay_with_gateway'.trParams({'gateway': widget.gatewayName}),
+          showBackButton: true,
+          onBackButtonPressed: () async {
+            final shouldLeave = await _onBackPressed();
+            if (shouldLeave && context.mounted) {
+              context.pop(PaymentResult.cancelled);
+            }
+          },
+        ),
+        body: Column(
+          children: [
+            // Progress indicator bar
+            if (_isLoading)
+              LinearProgressIndicator(
+                value: _progress > 0 ? _progress : null,
+                minHeight: 3,
+                backgroundColor: Colors.grey.shade200,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  ColorResource.primaryDark,
+                ),
+              ),
+            Expanded(
+              child: _hasError
+                  ? _buildErrorWidget()
+                  : Stack(
+                      children: [
+                        InAppWebView(
+                          initialUrlRequest:
+                              URLRequest(url: WebUri(widget.paymentURL)),
+                          initialSettings: InAppWebViewSettings(
+                            javaScriptEnabled: true,
+                            domStorageEnabled: true,
+                            useShouldOverrideUrlLoading: true,
+                            supportZoom: false,
+                            clearCache: true,
+                          ),
+                          onWebViewCreated: (controller) =>
+                              _controller = controller,
+                          onLoadStart: (controller, url) {
+                            _checkURL(url.toString());
+                          },
+                          onLoadStop: (controller, url) {
+                            if (mounted) {
+                              setState(() => _isLoading = false);
+                            }
+                            _checkURL(url.toString());
+                          },
+                          onProgressChanged: (controller, progress) {
+                            if (mounted) {
+                              setState(() => _progress = progress / 100);
+                            }
+                          },
+                          onReceivedError: (controller, request, error) {
+                            if (mounted) {
+                              setState(() {
+                                _isLoading = false;
+                                _hasError = true;
+                              });
+                            }
+                          },
+                          shouldOverrideUrlLoading:
+                              (controller, navigationAction) async {
+                            final url =
+                                navigationAction.request.url.toString();
+                            _checkURL(url);
+                            return NavigationActionPolicy.ALLOW;
+                          },
+                        ),
+                        if (_isLoading && _progress == 0)
+                          const Center(child: CircularProgressIndicator()),
+                      ],
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorWidget() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.wifi_off_rounded, size: 64, color: Colors.grey.shade400),
+            const SizedBox(height: 16),
+            Text(
+              'failed_to_load_payment_page'.tr,
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'check_internet_and_try_again'.tr,
+              style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () {
+                setState(() {
+                  _hasError = false;
+                  _isLoading = true;
+                  _progress = 0;
+                });
+                _controller?.reload();
+              },
+              icon: const Icon(Icons.refresh),
+              label: Text('retry'.tr),
+            ),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: () => context.pop(PaymentResult.cancelled),
+              child: Text('cancel_payment'.tr),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

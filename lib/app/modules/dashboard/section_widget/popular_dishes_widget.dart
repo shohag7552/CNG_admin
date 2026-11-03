@@ -1,0 +1,254 @@
+import 'package:kikomart_user_app/app/common/widgets/hover_arrow_carousel.dart';
+import 'package:kikomart_user_app/app/common/widgets/hover_lift.dart';
+import 'package:kikomart_user_app/app/common/widgets/web_top_nav.dart';
+import 'package:kikomart_user_app/app/controllers/cart_controller.dart';
+import 'package:kikomart_user_app/app/controllers/product_controller.dart';
+import 'package:kikomart_user_app/app/helper/cart_helper.dart';
+import 'package:kikomart_user_app/app/helper/localization_extension_helper.dart';
+import 'package:kikomart_user_app/app/modules/dashboard/section_widget/food_card_metrics.dart';
+import 'package:kikomart_user_app/app/modules/dashboard/widgets/food_item_card.dart';
+import 'package:kikomart_user_app/app/modules/dashboard/widgets/dashboard_shimmer.dart';
+import 'package:kikomart_user_app/app/modules/dashboard/widgets/product_detail_bottomsheet.dart';
+import 'package:kikomart_user_app/app/resources/colors.dart';
+import 'package:kikomart_user_app/app/resources/constants.dart';
+import 'package:kikomart_user_app/app/resources/text_style.dart';
+import 'package:flutter/material.dart';
+import 'package:carousel_slider/carousel_slider.dart';
+import 'package:get/get.dart';
+
+class PopularDishesWidget extends StatefulWidget {
+  const PopularDishesWidget({super.key});
+
+  @override
+  State<PopularDishesWidget> createState() => _PopularDishesWidgetState();
+}
+
+class _PopularDishesWidgetState extends State<PopularDishesWidget> {
+  // Lets the web hover arrows page the auto-playing carousel.
+  final CarouselSliderController _carouselController =
+      CarouselSliderController();
+
+  @override
+  Widget build(BuildContext context) {
+    return GetBuilder<ProductController>(
+      builder: (controller) {
+        // Nothing to show: the section disappears instead of an empty shell.
+        if (!controller.showPopularSection) return const SizedBox.shrink();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Own top spacing — the home column adds none, so nothing doubles
+            // up when the section hides itself.
+            const SizedBox(height: Constants.spaceSection),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.trending_up,
+                    color: ColorResource.success,
+                    size: 28,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'popular_dishes'.tr,
+                    style: poppinsBold.copyWith(
+                      fontSize: Constants.fontSizeExtraLarge,
+                      color: context.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Loading State
+            if (controller.isLoadingPopular)
+              const HorizontalFoodListShimmer(isPopular: true)
+            // Error State
+            else if (controller.popularErrorMessage != null)
+              SizedBox(
+                height: 290,
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.error_outline,
+                        color: ColorResource.error,
+                        size: 48,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'failed_to_load_popular_dishes'.tr,
+                        style: poppinsMedium.copyWith(
+                          fontSize: Constants.fontSizeDefault,
+                          color: context.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: () => controller.getPopularProducts(),
+                        child: Text(
+                          'retry'.tr,
+                          style: poppinsBold.copyWith(
+                            fontSize: Constants.fontSizeDefault,
+                            color: ColorResource.primaryDark,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            // Products List
+            else
+              Padding(
+                // The strip has to start where the section title and the grid
+                // below it start — one inset from the content band. Each card
+                // already carries half the shared gap on each side, so the rail
+                // only needs the difference; padding by the full inset would
+                // push the first card past the title it sits under.
+                //
+                // Outside the LayoutBuilder on purpose: the viewport fraction
+                // is derived from the measured width, and measuring the
+                // unpadded width would make every card wider than a grid
+                // column.
+                padding: EdgeInsets.symmetric(
+                  horizontal: WebTopNav.isEnabled(context)
+                      ? FoodCardMetrics.gutter - FoodCardMetrics.spacing / 2
+                      : 0,
+                ),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final products = controller.popularProducts;
+                    final width = constraints.maxWidth;
+                    final isWebShell = WebTopNav.isEnabled(context);
+                    final screenWidth = MediaQuery.of(context).size.width;
+                    // Web: cards match the All Products grid size. Each item
+                    // carries half the shared gap on each side, so neighbouring
+                    // cards sit exactly FoodCardMetrics.spacing apart — the same
+                    // rhythm as the grid. The viewport fraction has to include
+                    // that gap or the cards come out narrower than the grid's.
+                    final double itemSidePadding = isWebShell
+                        ? FoodCardMetrics.spacing / 2
+                        : 6;
+                    final double viewportFraction = isWebShell
+                        ? ((FoodCardMetrics.webCardWidth(screenWidth) +
+                                      FoodCardMetrics.spacing) /
+                                  width)
+                              .clamp(0.15, 0.95)
+                        : width >= 900
+                        ? 0.30
+                        : width >= 600
+                        ? 0.40
+                        : 0.56;
+                    // +8 covers the item's vertical padding (4 top + 4 bottom).
+                    final double carouselHeight = isWebShell
+                        ? FoodCardMetrics.webCardHeight(screenWidth) + 8
+                        : 250;
+
+                    // Hover-revealed arrows page the carousel on desktop web —
+                    // hidden when every dish already fits in the viewport
+                    // (items × fraction ≤ 1 means nothing to page through).
+                    return HoverArrows(
+                      onLeft: () => _carouselController.previousPage(),
+                      onRight: () => _carouselController.nextPage(),
+                      canScroll: () =>
+                          products.length * viewportFraction > 1.001,
+                      child: CarouselSlider.builder(
+                        carouselController: _carouselController,
+                        itemCount: products.length,
+                        itemBuilder: (context, index, realIndex) {
+                          final product = products[index];
+
+                          return GetBuilder<CartController>(
+                            builder: (cartController) {
+                              final cartQuantity =
+                                  CartHelper.getProductCartQuantity(product.id);
+
+                              final card = FoodItemCard(
+                                name: product.nameMap.trLanguage,
+                                isPopular: true,
+                                imageUrl: product.imageId,
+                                description: product.descriptionMap.trLanguage,
+                                price: product.finalPrice,
+                                oldPrice: product.hasDiscount
+                                    ? product.price
+                                    : null,
+                                product: product,
+                                cartQuantity: cartQuantity,
+                                onTap: () {
+                                  ProductDetailBottomSheet.show(
+                                    context,
+                                    product,
+                                  );
+                                },
+                                onAddToCart: () => CartHelper.handleAddToCart(
+                                  product,
+                                  context,
+                                ),
+                                onQuantityChanged: (isIncrement) {
+                                  if (isIncrement) {
+                                    CartHelper.incrementQuantity(
+                                      product,
+                                      context,
+                                    );
+                                  } else {
+                                    CartHelper.decrementQuantity(
+                                      product,
+                                      context,
+                                    );
+                                  }
+                                },
+                              );
+
+                              return Padding(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: itemSidePadding,
+                                  vertical: 4,
+                                ),
+                                // Web-only hover lift; touch gets the bare card.
+                                child: isWebShell
+                                    ? HoverLift(child: card)
+                                    : card,
+                              );
+                            },
+                          );
+                        },
+                        options: CarouselOptions(
+                          height: carouselHeight,
+                          viewportFraction: viewportFraction,
+                          // Centring the first card is a touch affordance — it
+                          // shows there is more to swipe. On web it just left the
+                          // strip starting hundreds of pixels right of everything
+                          // else on the page.
+                          padEnds: !isWebShell,
+                          // The center-zoom is a touch affordance; on web the
+                          // cards stay uniform so they match the grid size.
+                          enlargeCenterPage: !isWebShell,
+                          enlargeFactor: 0.2,
+                          enlargeStrategy: CenterPageEnlargeStrategy.zoom,
+                          enableInfiniteScroll: products.length > 1,
+                          autoPlay: products.length > 1,
+                          autoPlayInterval: const Duration(seconds: 5),
+                          autoPlayAnimationDuration: const Duration(
+                            milliseconds: 1000,
+                          ),
+                          autoPlayCurve: Curves.linear,
+                          pauseAutoPlayOnTouch: true,
+                          pauseAutoPlayOnManualNavigate: true,
+                          pauseAutoPlayInFiniteScroll: false,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}

@@ -1,0 +1,275 @@
+import 'package:kikomart_user_app/app/common/widgets/custom_appbar.dart';
+import 'package:kikomart_user_app/app/common/widgets/hover_lift.dart';
+import 'package:kikomart_user_app/app/common/widgets/web_footer.dart';
+import 'package:kikomart_user_app/app/common/widgets/web_top_nav.dart';
+import 'package:kikomart_user_app/app/controllers/flash_sale_controller.dart';
+import 'package:kikomart_user_app/app/helper/dashboard_tab_bus.dart';
+import 'package:kikomart_user_app/app/modules/dashboard/widgets/web_profile_drawer.dart';
+import 'package:kikomart_user_app/app/modules/flash_sale/widgets/flash_sale_backdrop.dart';
+import 'package:kikomart_user_app/app/modules/flash_sale/widgets/flash_sale_countdown.dart';
+import 'package:kikomart_user_app/app/modules/flash_sale/widgets/flash_sale_item_card.dart';
+import 'package:kikomart_user_app/app/resources/colors.dart';
+import 'package:kikomart_user_app/app/resources/constants.dart';
+import 'package:kikomart_user_app/app/resources/text_style.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
+import 'package:get/get.dart';
+
+/// Full flash-sale page ("see all"): banner with live countdown + a
+/// responsive grid of all sale items. Deep-linkable — fetches the sale itself
+/// when opened cold.
+class FlashSaleScreen extends StatefulWidget {
+  const FlashSaleScreen({super.key});
+
+  @override
+  State<FlashSaleScreen> createState() => _FlashSaleScreenState();
+}
+
+class _FlashSaleScreenState extends State<FlashSaleScreen> {
+  static const double _maxContentWidth = 1200;
+  final GlobalKey<ScaffoldState> _webScaffoldKey = GlobalKey<ScaffoldState>();
+
+  static const List<double> _staggerRatios = [1, 0.82, 1, 0.75, 0.9, 1, 0.8];
+
+  double _imageRatioFor(int index) =>
+      _staggerRatios[index % _staggerRatios.length];
+
+  int _gridColumns(double contentWidth) =>
+      (contentWidth / 250).floor().clamp(2, 4);
+
+  @override
+  void initState() {
+    super.initState();
+    final controller = Get.find<FlashSaleController>();
+    if (!controller.hasActiveSale && !controller.isLoading) {
+      controller.getFlashSale();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final useWebShell = WebTopNav.isEnabled(context);
+    return useWebShell ? _buildWebScaffold() : _buildMobileScaffold();
+  }
+
+  Widget _buildMobileScaffold() {
+    return Scaffold(
+      backgroundColor: context.scaffoldBackground,
+      appBar: CustomAppbar(title: 'flash_sale'.tr),
+      body: _buildBody(isWide: false),
+    );
+  }
+
+  Widget _buildWebScaffold() {
+    return Scaffold(
+      key: _webScaffoldKey,
+      backgroundColor: context.scaffoldBackground,
+      appBar: WebTopNav(
+        selectedIndex: null,
+        onDestinationSelected: (index) {
+          DashboardTabs.open(context, index);
+        },
+        onMenuTap: () => _webScaffoldKey.currentState?.openEndDrawer(),
+      ),
+      endDrawer: const WebProfileDrawer(),
+      body: _buildBody(isWide: true),
+    );
+  }
+
+  Widget _buildBody({required bool isWide}) {
+    final width = MediaQuery.of(context).size.width;
+    final double sidePad = isWide ? WebTopNav.bodySidePadding(width) : 16.0;
+    final double contentWidth = isWide
+        ? (width > _maxContentWidth ? _maxContentWidth : width)
+        : width;
+    final crossAxisCount = _gridColumns(contentWidth - 32);
+
+    return GetBuilder<FlashSaleController>(
+      builder: (controller) {
+        if (controller.isLoading && !controller.hasActiveSale) {
+          return const Center(
+            child: CircularProgressIndicator(color: ColorResource.primaryDark),
+          );
+        }
+
+        if (controller.errorMessage != null && !controller.hasActiveSale) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline, color: ColorResource.error, size: 48),
+                const SizedBox(height: 12),
+                Text(
+                  'failed_to_load_flash_sale'.tr,
+                  style: poppinsMedium.copyWith(
+                    fontSize: Constants.fontSizeDefault,
+                    color: context.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () => controller.getFlashSale(),
+                  child: Text(
+                    'retry'.tr,
+                    style: poppinsBold.copyWith(
+                      fontSize: Constants.fontSizeDefault,
+                      color: ColorResource.primaryDark,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        if (!controller.hasActiveSale) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.flash_off_rounded,
+                  size: 64,
+                  color: context.textLight,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'flash_sale_ended'.tr,
+                  style: poppinsBold.copyWith(
+                    fontSize: Constants.fontSizeLarge,
+                    color: context.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final sale = controller.activeSale!;
+
+        return RefreshIndicator(
+          color: ColorResource.primaryDark,
+          onRefresh: () => controller.getFlashSale(reload: true),
+          child: CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              // Banner: sale title + live countdown.
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(sidePad, 16, sidePad, 4),
+                sliver: SliverToBoxAdapter(
+                  child: FlashSaleBackdrop(
+                    padding: const EdgeInsets.all(Constants.paddingSizeLarge),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        // Phones stack the countdown under the titles so the
+                        // chips keep their full size.
+                        final bool compact = constraints.maxWidth < 520;
+
+                        final Widget titles = Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '⚡ ${'flash_sale'.tr}',
+                              style: poppinsBold.copyWith(
+                                fontSize: Constants.fontSizeExtraLarge,
+                                color: ColorResource.textWhite,
+                              ),
+                            ),
+                            if (sale.title.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                sale.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: poppinsRegular.copyWith(
+                                  fontSize: Constants.fontSizeDefault,
+                                  color: ColorResource.textWhite.withValues(
+                                    alpha: 0.85,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        );
+
+                        final Widget timer = Column(
+                          crossAxisAlignment: compact
+                              ? CrossAxisAlignment.start
+                              : CrossAxisAlignment.end,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'ends_in'.tr.toUpperCase(),
+                              style: poppinsMedium.copyWith(
+                                fontSize: Constants.fontSizeExtraSmall,
+                                letterSpacing: 1.2,
+                                color: ColorResource.textWhite.withValues(
+                                  alpha: 0.85,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(
+                              height: Constants.paddingSizeExtraSmall + 1,
+                            ),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: FlashSaleCountdown(
+                                remaining: controller.remaining,
+                                large: true,
+                              ),
+                            ),
+                          ],
+                        );
+
+                        if (compact) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              titles,
+                              const SizedBox(
+                                height: Constants.paddingSizeDefault,
+                              ),
+                              timer,
+                            ],
+                          );
+                        }
+                        return Row(
+                          children: [
+                            Expanded(child: titles),
+                            const SizedBox(width: Constants.paddingSizeLarge),
+                            timer,
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+
+              // Items grid — responsive columns, hover lift on web.
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(sidePad, 12, sidePad, 32),
+                sliver: SliverMasonryGrid.count(
+                  crossAxisCount: crossAxisCount,
+                  mainAxisSpacing: Constants.paddingSizeLarge,
+                  crossAxisSpacing: Constants.paddingSizeLarge,
+                  childCount: controller.items.length,
+                  itemBuilder: (context, index) {
+                    final card = FlashSaleItemCard(
+                      item: controller.items[index],
+                      imageAspectRatio: _imageRatioFor(index),
+                    );
+                    return isWide ? HoverLift(child: card) : card;
+                  },
+                ),
+              ),
+
+              // Web footer
+              WebFooter.sliver(),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
