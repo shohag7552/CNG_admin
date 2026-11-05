@@ -67,3 +67,4 @@ flutter test
 flutter build apk --release --split-per-abi
 ./tool/build_web.sh
 ```
+# CNG_admin
