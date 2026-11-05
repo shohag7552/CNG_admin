@@ -1,11 +1,11 @@
 {
-    "name": "Appwrite Boilerplate",
-    "short_name": "Appwrite Boilerplate",
+    "name": "CNG Go Admin",
+    "short_name": "CNG Go Admin",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#F5F7FA",
     "theme_color": "#C92A2A",
-    "description": "Appwrite Boilerplate app",
+    "description": "CNG Go Admin app",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

@@ -13,7 +13,7 @@ class Constants {
   //  See README.md › "Start a new project".
   // ═════════════════════════════════════════════════════════════════════════
 
-  static const String appName = 'Appwrite Boilerplate';
+  static const String appName = 'CNG Go Admin';
 
   /// Keep in sync with `version:` in pubspec.yaml — drives force-update.
   static const String appVersion = "1.0.0";
@@ -23,7 +23,8 @@ class Constants {
   static const String webBaseUrl = 'https://your-app.appwrite.network';
 
   /// Brand colour as an int (this file stays Flutter-free, see above).
-  static const int primaryColorValue = 0xFF2563EB;
+  // Deep emerald: white text on it passes WCAG AA (≈5:1).
+  static const int primaryColorValue = 0xFF0A7F58;
 
   // ── Appwrite ── (Console › Project › Settings)
   static const String endpoint = 'https://cloud.appwrite.io/v1';
@@ -134,6 +135,41 @@ class Constants {
   /// Bottom clearance so scrollable content / bottom bars are not hidden
   /// behind the floating bottom navigation bar.
   static const double bottomNavSpace = 90.0;
+
+  // ── Booking UI tokens (shared with the customer app) ──
+  static const double radiusSheet = 28.0;
+  static const double avatarSize = 48.0;
+  static const double mapPinSize = 40.0;
+  static const double routeDotSize = 10.0;
+  static const double sheetMaxHeightFactor = 0.62;
+
+  /// Fare rules shown in the UI (BDT, whole numbers). The backend re-validates.
+  static const int fareStep = 10;
+  static const int minFare = 20;
+  static const int maxFare = 5000;
+
+  /// Demo value; replaced by `business_settings.bookingExpirySeconds`.
+  static const int bookingExpirySeconds = 90;
+
+  // ── Admin layout tokens ──
+  static const double sidebarWidth = 248.0;
+  static const double topBarHeight = 64.0;
+  static const double adminMaxContentWidth = 1280.0;
+  static const double tableRowHeight = 56.0;
+  static const double tableHeaderHeight = 44.0;
+  static const double statCardMinWidth = 200.0;
+  static const double chartHeight = 160.0;
+  static const double mapHeight = 260.0;
+  static const double documentBoxHeight = 140.0;
+  static const double dialogMaxWidth = 460.0;
+  static const double filterFieldWidth = 220.0;
+  static const double searchFieldWidth = 320.0;
+  static const int pageSize = 8;
+  static const double skeletonRowHeight = 44.0;
+  static const double timelineDotSize = 12.0;
+  static const double settingsFormMaxWidth = 720.0;
+  static const double sidePanelWidth = 380.0;
+  static const double chipVerticalPadding = 3.0;
 
   static List<LanguageModel> languages = [
     LanguageModel(imageUrl: Images.english, languageName: 'English', countryCode: 'US', languageCode: 'en'),

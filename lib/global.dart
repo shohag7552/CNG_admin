@@ -66,6 +66,9 @@ class Global {
   /// On any failure it leaves [AppRouter.startLocation] as the splash route,
   /// which has its own offline/retry handling as a fallback.
   static Future<void> _bootstrapWebStartLocation() async {
+    // UI phase (mock data): open on the admin dashboard even when Appwrite is
+    // unreachable. The AdminGuard still redirects to login when signed out.
+    AppRouter.startLocation = AppRouter.dashboard;
     try {
       // Prime the cached auth state so login-gated pages render correctly.
       await Get.find<AuthController>().isAlreadyLoggedIn();

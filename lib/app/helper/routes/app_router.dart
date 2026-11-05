@@ -1,6 +1,5 @@
 import 'package:appwrite_boilerplate/app/controllers/settings_controller.dart';
 import 'package:appwrite_boilerplate/app/controllers/policy_controller.dart';
-import 'package:appwrite_boilerplate/app/helper/dashboard_tab_bus.dart';
 import 'package:appwrite_boilerplate/app/models/address_model.dart';
 import 'package:appwrite_boilerplate/app/modules/address/screens/add_edit_address_page.dart';
 import 'package:appwrite_boilerplate/app/modules/address/screens/addresses_page.dart';
@@ -9,7 +8,21 @@ import 'package:appwrite_boilerplate/app/modules/auth/screens/forgot_password_sc
 import 'package:appwrite_boilerplate/app/modules/auth/screens/reset_password_screen.dart';
 import 'package:appwrite_boilerplate/app/modules/auth/screens/login_screen.dart';
 import 'package:appwrite_boilerplate/app/modules/auth/screens/signup_screen.dart';
-import 'package:appwrite_boilerplate/app/modules/dashboard/screens/dashboard_screen.dart';
+import 'package:appwrite_boilerplate/app/controllers/admin_session_controller.dart';
+import 'package:appwrite_boilerplate/app/helper/admin_guard.dart';
+import 'package:appwrite_boilerplate/app/modules/audit/screens/audit_log_screen.dart';
+import 'package:appwrite_boilerplate/app/modules/bookings/screens/booking_detail_screen.dart';
+import 'package:appwrite_boilerplate/app/modules/bookings/screens/bookings_screen.dart';
+import 'package:appwrite_boilerplate/app/modules/bookings/screens/trips_screen.dart';
+import 'package:appwrite_boilerplate/app/modules/business_settings/screens/business_settings_screen.dart';
+import 'package:appwrite_boilerplate/app/modules/dashboard/screens/admin_dashboard_screen.dart';
+import 'package:appwrite_boilerplate/app/modules/drivers/screens/driver_detail_screen.dart';
+import 'package:appwrite_boilerplate/app/modules/drivers/screens/drivers_screen.dart';
+import 'package:appwrite_boilerplate/app/modules/passengers/screens/passenger_detail_screen.dart';
+import 'package:appwrite_boilerplate/app/modules/passengers/screens/passengers_screen.dart';
+import 'package:appwrite_boilerplate/app/modules/reports/screens/reports_screen.dart';
+import 'package:appwrite_boilerplate/app/modules/shell/screens/admin_shell.dart';
+import 'package:appwrite_boilerplate/app/modules/shell/screens/not_authorized_screen.dart';
 import 'package:appwrite_boilerplate/app/modules/dashboard/widgets/full_screen_image_viewer.dart';
 import 'package:appwrite_boilerplate/app/modules/language/screens/language_screen.dart';
 import 'package:appwrite_boilerplate/app/modules/notification/screens/notification_screen.dart';
@@ -50,6 +63,18 @@ abstract class RouteNames {
   static const helpSupport = 'help-support';
   static const mapPicker = 'map-picker';
   static const imageViewer = 'image-viewer';
+  static const notAuthorized = 'not-authorized';
+  static const drivers = 'drivers';
+  static const driverDetail = 'driver-detail';
+  static const passengers = 'passengers';
+  static const passengerDetail = 'passenger-detail';
+  static const bookings = 'bookings';
+  static const bookingDetail = 'booking-detail';
+  static const trips = 'trips';
+  static const tripDetail = 'trip-detail';
+  static const reports = 'reports';
+  static const businessSettings = 'business-settings';
+  static const auditLog = 'audit-log';
 }
 
 // ── Argument bundles for routes that carry more than one non-URL value. ──
@@ -132,10 +157,25 @@ abstract class AppRouter {
   static const String helpSupport = '/help-support';
   static const String mapPicker = '/map-picker';
   static const String imageViewer = '/image-viewer';
+  static const String notAuthorized = '/not-authorized';
+  static const String drivers = '/drivers';
+  static const String driverDetail = '/drivers/:id';
+  static const String passengers = '/passengers';
+  static const String passengerDetail = '/passengers/:id';
+  static const String bookings = '/bookings';
+  static const String bookingDetail = '/bookings/:id';
+  static const String trips = '/trips';
+  static const String tripDetail = '/trips/:id';
+  static const String reports = '/reports';
+  static const String businessSettings = '/business-settings';
+  static const String auditLog = '/audit-log';
 
   static final GoRouter router = GoRouter(
     navigatorKey: rootNavigatorKey,
     initialLocation: startLocation,
+    // Re-run the guard when the session changes (logout, role switch).
+    refreshListenable: Get.find<AdminSessionController>().routerRefresh,
+    redirect: (context, state) => AdminGuard.redirect(state.uri.path),
     routes: [
       GoRoute(
         path: splash,
@@ -189,14 +229,36 @@ abstract class AppRouter {
         ),
       ),
       GoRoute(
-        path: dashboard,
-        name: RouteNames.dashboard,
-        // `?tab=profile` (etc.) selects a dashboard tab, making every tab a
-        // shareable URL; no parameter means "leave the current tab alone".
-        builder: (context, state) => DashboardScreen(
-          initialTab:
-              DashboardTabs.indexFromName(state.uri.queryParameters['tab']),
-        ),
+        path: notAuthorized,
+        name: RouteNames.notAuthorized,
+        builder: (context, state) => const NotAuthorizedScreen(),
+      ),
+      // Every admin page lives under the shell (sidebar + top bar) and has a
+      // real URL, so refresh and deep links work.
+      ShellRoute(
+        builder: (context, state, child) =>
+            AdminShell(location: state.uri.path, child: child),
+        routes: [
+          _page(dashboard, RouteNames.dashboard,
+              (s) => const AdminDashboardScreen()),
+          _page(drivers, RouteNames.drivers, (s) => const DriversScreen()),
+          _page(driverDetail, RouteNames.driverDetail,
+              (s) => DriverDetailScreen(id: s.pathParameters['id']!)),
+          _page(passengers, RouteNames.passengers,
+              (s) => const PassengersScreen()),
+          _page(passengerDetail, RouteNames.passengerDetail,
+              (s) => PassengerDetailScreen(id: s.pathParameters['id']!)),
+          _page(bookings, RouteNames.bookings, (s) => const BookingsScreen()),
+          _page(bookingDetail, RouteNames.bookingDetail,
+              (s) => BookingDetailScreen(id: s.pathParameters['id']!)),
+          _page(trips, RouteNames.trips, (s) => const TripsScreen()),
+          _page(tripDetail, RouteNames.tripDetail,
+              (s) => BookingDetailScreen(id: s.pathParameters['id']!, fromTrips: true)),
+          _page(reports, RouteNames.reports, (s) => const ReportsScreen()),
+          _page(businessSettings, RouteNames.businessSettings,
+              (s) => const BusinessSettingsScreen()),
+          _page(auditLog, RouteNames.auditLog, (s) => const AuditLogScreen()),
+        ],
       ),
       GoRoute(
         path: editProfile,
@@ -288,6 +350,19 @@ abstract class AppRouter {
     ],
   );
 }
+
+/// Shell page without a transition, so sidebar navigation feels instant.
+GoRoute _page(
+  String path,
+  String name,
+  Widget Function(GoRouterState state) build,
+) =>
+    GoRoute(
+      path: path,
+      name: name,
+      pageBuilder: (context, state) =>
+          NoTransitionPage<void>(key: state.pageKey, child: build(state)),
+    );
 
 /// Hydrates a page's data from its URL when a route is opened via a cold deep
 /// link (hard refresh / copied URL — `extra` is `null`). Shows a spinner while

@@ -125,6 +125,10 @@ class ColorResource {
   static const Color error = Color(0xFFEF4444);
   static const Color info = Color(0xFF3B82F6);
 
+  /// Money accent: fares, counteroffers, BDT amounts.
+  static const Color accent = Color(0xFFF59E0B);
+  static const Color accentDark = Color(0xFFB45309); // text-safe on light
+
   // UI Element Colors
   static const Color ratingStarColor = Color(0xFFFBBF24);
   static const Color favoriteColor = Color(0xFFEF4444);

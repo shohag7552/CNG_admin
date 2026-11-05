@@ -116,7 +116,7 @@ ThemeData _buildTheme({required Brightness brightness}) {
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        foregroundColor: isDark ? Colors.white70 : const Color(0xFFAFAFAF),
+        foregroundColor: isDark ? Colors.white70 : ColorResource.primaryDark,
       ),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(

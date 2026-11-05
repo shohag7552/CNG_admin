@@ -1,6 +1,27 @@
 import 'dart:convert';
 
 import 'package:appwrite_boilerplate/app/appwrite/appwrite_service.dart';
+import 'package:appwrite_boilerplate/app/controllers/admin_session_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/audit_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/bookings_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/business_settings_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/dashboard_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/drivers_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/passengers_controller.dart';
+import 'package:appwrite_boilerplate/app/controllers/reports_controller.dart';
+import 'package:appwrite_boilerplate/app/helper/mock_admin_store.dart';
+import 'package:appwrite_boilerplate/app/modules/audit/domain/repository/audit_repo_interface.dart';
+import 'package:appwrite_boilerplate/app/modules/audit/domain/repository/audit_repository.dart';
+import 'package:appwrite_boilerplate/app/modules/bookings/domain/repository/booking_repo_interface.dart';
+import 'package:appwrite_boilerplate/app/modules/bookings/domain/repository/booking_repository.dart';
+import 'package:appwrite_boilerplate/app/modules/business_settings/domain/repository/business_settings_repo_interface.dart';
+import 'package:appwrite_boilerplate/app/modules/business_settings/domain/repository/business_settings_repository.dart';
+import 'package:appwrite_boilerplate/app/modules/dashboard/domain/repository/dashboard_repo_interface.dart';
+import 'package:appwrite_boilerplate/app/modules/dashboard/domain/repository/dashboard_repository.dart';
+import 'package:appwrite_boilerplate/app/modules/drivers/domain/repository/driver_repo_interface.dart';
+import 'package:appwrite_boilerplate/app/modules/drivers/domain/repository/driver_repository.dart';
+import 'package:appwrite_boilerplate/app/modules/passengers/domain/repository/passenger_repo_interface.dart';
+import 'package:appwrite_boilerplate/app/modules/passengers/domain/repository/passenger_repository.dart';
 import 'package:appwrite_boilerplate/app/controllers/address_controller.dart';
 import 'package:appwrite_boilerplate/app/controllers/auth_controller.dart';
 import 'package:appwrite_boilerplate/app/controllers/item_controller.dart';
@@ -85,7 +106,32 @@ Future<Map<String, Map<String, String>>> initializeDependencies() async {
   );
   Get.lazyPut(() => itemRepoInterface);
 
+  // UI phase: one shared in-memory dataset behind mock repositories. Swap each
+  // for its Appwrite-backed implementation later; nothing above changes.
+  final mockStore = MockAdminStore();
+  Get.lazyPut<MockAdminStore>(() => mockStore);
+  Get.lazyPut<DriverRepoInterface>(() => DriverRepository(store: mockStore));
+  Get.lazyPut<PassengerRepoInterface>(() => PassengerRepository(store: mockStore));
+  Get.lazyPut<BookingRepoInterface>(() => BookingRepository(store: mockStore));
+  Get.lazyPut<DashboardRepoInterface>(() => DashboardRepository(store: mockStore));
+  Get.lazyPut<AuditRepoInterface>(() => AuditRepository(store: mockStore));
+  Get.lazyPut<BusinessSettingsRepoInterface>(
+      () => BusinessSettingsRepository(store: mockStore));
+
   /// Controllers
+  Get.lazyPut(() => AdminSessionController());
+  Get.lazyPut(() => DashboardController(
+        dashboardRepoInterface: Get.find(),
+        driverRepoInterface: Get.find(),
+        bookingRepoInterface: Get.find(),
+      ));
+  Get.lazyPut(() => DriversController(driverRepoInterface: Get.find()));
+  Get.lazyPut(() => PassengersController(passengerRepoInterface: Get.find()));
+  Get.lazyPut(() => BookingsController(bookingRepoInterface: Get.find()));
+  Get.lazyPut(() => TripsController(bookingRepoInterface: Get.find()));
+  Get.lazyPut(() => ReportsController(bookingRepoInterface: Get.find()));
+  Get.lazyPut(() => AuditController(auditRepoInterface: Get.find()));
+  Get.lazyPut(() => BusinessSettingsController(settingsRepoInterface: Get.find()));
   Get.lazyPut(() => AuthController(authRepoInterface: Get.find()));
   Get.lazyPut(() => SplashController(splashRepositoryInterface: Get.find()));
   Get.lazyPut(() => SettingsController(settingsRepoInterface: Get.find()));
