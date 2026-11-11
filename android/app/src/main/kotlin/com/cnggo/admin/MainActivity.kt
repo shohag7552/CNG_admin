@@ -1,4 +1,4 @@
-package com.example.appwrite_boilerplate
+package com.cnggo.admin
 
 import io.flutter.embedding.android.FlutterFragmentActivity
 

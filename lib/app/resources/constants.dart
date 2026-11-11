@@ -17,7 +17,7 @@ class Constants {
 
   /// Keep in sync with `version:` in pubspec.yaml — drives force-update.
   static const String appVersion = "1.0.0";
-  static const String packageName = 'com.example.appwrite_boilerplate';
+  static const String packageName = 'com.cnggo.admin';
 
   /// Deployed Flutter web build (share links, password-recovery links).
   static const String webBaseUrl = 'https://your-app.appwrite.network';
@@ -29,7 +29,7 @@ class Constants {
   // ── Appwrite ── (Console › Project › Settings)
   static const String endpoint = 'https://sgp.cloud.appwrite.io/v1';
   static const String projectId = '6af42d370036f3d1cf4d';
-  static const String databaseId = 'YOUR_DATABASE_ID';
+  static const String databaseId = '6af42f2d0018ed2e149a';
   // No Appwrite API key here: a key compiled into a client app can be
   // extracted by anyone. Server keys live only in Function environments.
 
@@ -37,7 +37,7 @@ class Constants {
   static const String dbId = databaseId;
 
   /// Storage bucket for uploaded images (avatars, etc.).
-  static const String storageBucketId = 'YOUR_BUCKET_ID';
+  static const String storageBucketId = 'images';
 
   /// FCM push plumbing (Appwrite Messaging). Leave as-is until push is set up.
   static const String messagingProviderId = 'YOUR_FCM_PROVIDER_ID';

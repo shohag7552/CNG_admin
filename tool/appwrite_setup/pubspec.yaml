@@ -1,0 +1,9 @@
+name: appwrite_setup
+description: One-off dev-project setup script (tables, columns, indexes, bucket). Not shipped in any app.
+publish_to: none
+environment:
+  sdk: ^3.10.1
+dependencies:
+  dart_appwrite: ^21.0.0
+dev_dependencies:
+  test: ^1.25.0
