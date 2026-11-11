@@ -27,8 +27,8 @@ class Constants {
   static const int primaryColorValue = 0xFF0A7F58;
 
   // ── Appwrite ── (Console › Project › Settings)
-  static const String endpoint = 'https://cloud.appwrite.io/v1';
-  static const String projectId = 'YOUR_PROJECT_ID';
+  static const String endpoint = 'https://sgp.cloud.appwrite.io/v1';
+  static const String projectId = '6af42d370036f3d1cf4d';
   static const String databaseId = 'YOUR_DATABASE_ID';
   // No Appwrite API key here: a key compiled into a client app can be
   // extracted by anyone. Server keys live only in Function environments.
